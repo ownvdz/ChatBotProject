@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import requests
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -22,22 +23,36 @@ def load_timetable():
         print(f"경고: {json_path} 파일을 찾을 수 없습니다. 빈 데이터를 반환합니다.")
         return {}
 
+# 교통 API / 아직은 임시 데이터 사용
+def get_subway_info(station_name: str):
+    return [
+        {"line": "1호선", "destination": "청량리행 (상행)", "status": "3분 후 도착 (전역 출발)"},
+        {"line": "1호선", "destination": "인천행 (하행)", "status": "8분 후 도착 (2개 전역)"},
+    ]
+
+def get_bus_info(stop_name: str):
+    return [
+        {"bus_num": "511번", "status": "4분 후 도착 (2개 전역)", "seats": "좌석 여유"},
+        {"bus_num": "27번", "status": "11분 후 도착 (5개 전역)", "seats": "15석 남아있음"},
+    ]
+
 # -------------------------------------------------------------------------------------------
-class TimetableBot(commands.Bot):
+class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
         await self.tree.sync()
-        print("슬래시 명령어 동기화 완료!")
+        print("슬래시 명령어 동기화 성공")
 
     async def on_ready(self):
         print(f'로그인 성공: {self.user.name} (ID: {self.user.id})')
-        print('====== 봇이 정상적으로 작동 중입니다 ======')
+        print('정상작동')
 
-bot = TimetableBot()
+bot = MyBot()
 
+# -------------------------------------------------------------------------------------------
 @bot.tree.command(name="시간표", description="특정 요일의 수업 시간표를 조회합니다.")
 @app_commands.describe(day="조회할 요일을 선택하세요 (생략 시 오늘 요일 자동 선택)")
 @app_commands.choices(day=[
@@ -49,12 +64,12 @@ bot = TimetableBot()
     app_commands.Choice(name="토요일", value="토요일"),
     app_commands.Choice(name="일요일", value="일요일"),
 ])
-# 2. day: app_commands.Choice[str] = None 으로 수정 (기본값 설정)
+
 async def show_timetable(interaction: discord.Interaction, day: app_commands.Choice[str] = None):
     timetable_data = load_timetable()
 
     if day is None:
-        today_idx = datetime.datetime.now().weekday()  # 0: 월, 1: 화, ...
+        today_idx = datetime.datetime.now().weekday()
         selected_day = WEEKDAYS[today_idx]
         title_prefix = f"📅 오늘({selected_day})의 시간표"
     else:
@@ -63,7 +78,6 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
         
     schedule = timetable_data.get(selected_day)
 
-    # 3. title에 준비해 둔 title_prefix 변수 적용
     embed = discord.Embed(
         title=title_prefix,
         color=discord.Color.blue()
@@ -83,6 +97,51 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
     
     await interaction.response.send_message(embed=embed)
 
+# -------------------------------------------------------------------------------------------
+@bot.tree.command(name="지하철", description="지정한 지하철역의 실시간 도착 정보를 조회합니다.")
+@app_commands.describe(station="조회할 지하철역 이름을 입력하세요 (예: 인천대입구, 부평)")
+async def show_subway(interaction: discord.Interaction, station: str):
+    subway_data = get_subway_info(station)
+
+    embed = discord.Embed(
+        title=f"🚇 '{station}역' 실시간 도착 정보",
+        color=discord.Color.green(),
+        timestamp=datetime.datetime.now()
+    )
+
+    for info in subway_data:
+        embed.add_field(
+            name=f"[{info['line']}] {info['destination']}",
+            value=f"⏱️ **{info['status']}**",
+            inline=False
+        )
+
+    embed.set_footer(text="공공데이터 Open API 연동 모듈 | V1.1")
+    await interaction.response.send_message(embed=embed)
+
+# -------------------------------------------------------------------------------------------
+@bot.tree.command(name="버스", description="지정한 버스 정류장의 실시간 도착 정보를 조회합니다.")
+@app_commands.describe(stop="조회할 정류장 이름을 입력하세요 (예: 학교정문, 공과대학)")
+async def show_bus(interaction: discord.Interaction, stop: str):
+    bus_data = get_bus_info(stop)
+
+    embed = discord.Embed(
+        title=f"🚌 '{stop}' 정류장 실시간 도착 정보",
+        color=discord.Color.orange(),
+        timestamp=datetime.datetime.now()
+    )
+
+    for info in bus_data:
+        embed.add_field(
+            name=f"🚌 {info['bus_num']}",
+            value=f"⏱️ **{info['status']}** ({info['seats']})",
+            inline=False
+        )
+
+    embed.set_footer(text="TAGO 버스 API 연동 모듈 | V1.1")
+    await interaction.response.send_message(embed=embed)
+
+# -------------------------------------------------------------------------------------------  
 if __name__ == "__main__":
     if TOKEN:
         bot.run(TOKEN)
