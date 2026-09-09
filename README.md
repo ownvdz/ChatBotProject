@@ -18,7 +18,7 @@
 ## 🛠️ 기술 스택
 
 - **Language:** Python 3.10+
-- **Library:** `discord.py` (v2.0+), `python-dotenv`
+- **Library:** `discord.py` (v2.0+)
 - **Data Storage:** JSON (`timetable.json`)
 
 ---
