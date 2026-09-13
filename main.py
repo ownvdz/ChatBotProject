@@ -2,6 +2,7 @@ import os
 import json
 import datetime
 import requests
+import xml.etree.ElementTree as ET
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 # .env 파일에서 토큰 가져오기
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+BUS_API_KEY = os.getenv("PUBLIC_BUS_API_KEY")
 
 WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 
