@@ -3,52 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PPT 발표 시연용 페이지</title>
-    <style>
-        body {
-            font-family: 'Malgun Gothic', sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 500px;
-        }
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-        }
-        p {
-            color: #7f8c8d;
-            line-height: 1.6;
-        }
-        .badge {
-            display: inline-block;
-            background-color: #2ecc71;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            margin-top: 15px;
-        }
-    </style>
+    <title>인하대 디스코드 봇 - API 전환 및 기능 고도화 발표</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
 
-    <div class="container">
-        <h1>👋 성공적으로 연결되었습니다!</h1>
-        <p>깃허브 주소 앞에 <strong>htmlpreview</strong>를 붙여서 브라우저에 코드가 아닌 실제 웹 화면이 정상적으로 렌더링된 상태입니다.</p>
-        <span class="badge">발표 준비 완료</span>
-    </div>
+    <!-- Header Section -->
+    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">InhaBot v2.0 Update</h1>
+                    <p class="text-xs text-slate-400">TAGO API 전환 및 신규 기능 발표</p>
+                </div>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <i class="fa-solid fa-circle-check mr-1"></i> System Stable
+            </span>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-10 space-y-12">
+
+        <!-- Banner / Summary -->
+        <section class="rounded-2xl bg-gradient-to-r from-indigo-900/50 via-slate-900 to-slate-900 border border-indigo-500/20 p-8 relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 opacity-10 text-indigo-400 text-9xl">
+                <i class="fa-solid fa-bus"></i>
+            </div>
+            <div class="relative z-10 max-w-2xl space-y-4">
+                <span class="text-xs uppercase tracking-widest text-indigo-400 font-bold">Project Milestone</span>
+                <h2 class="text-3xl font-extrabold tracking-tight text-white">국토교통부 TAGO API 통합 및 <br><span class="text-indigo-400">지하철 확장 아키텍처</span> 구축</h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    기존 버스 API 오류를 완벽히 해결하기 위해 국토교통부(TAGO) 표준 공공데이터 API로 표준화하였습니다. 
+                    더불어 실시간 버스 추적, 디버그 시스템, 학생용 시간표 기능, 그리고 인천2호선 지하철 확장 기반을 마련했습니다.
+                </p>
+            </div>
+        </section>
+
+        <!-- Slide 1: TAGO API 전환 핵심 배경 -->
+        <section class="space-y-4">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-6 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-xl font-bold text-white">1. 버스 API 엔진 교체 (TAGO 공통 API)</h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-200">높은 안정성 확보</h4>
+                    <p class="text-xs text-slate-400 leading-normal">
+                        국토교통부(`apis.data.go.kr/1613000`) 연동을 통해 기존 비표준 API의 데이터 유실 문제를 완전 해소
+                    </p>
+                </div>
+                <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-200">자동 재시도 로직</h4>
+                    <p class="text-xs text-slate-400 leading-normal">
+                        XML 파싱 및 일시적 응답 지연에 대비한 Retry 알고리즘 적용으로 정상 성공 코드(`00`) 검증 강화
+                    </p>
+                </div>
+                <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-key"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-200">단일 ServiceKey 모듈화</h4>
+                    <p class="text-xs text-slate-400 leading-normal">
+                        하나의 공공데이터 Key로 버스 및 지하철정보 서비스(`SubwayInfoService`)까지 확장 가능한 인프라 구축
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 2: 주요 명령어 및 업데이트 내역 -->
+        <section class="space-y-4">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-6 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-xl font-bold text-white">2. 신규 및 고도화된 디스코드 명령어</h3>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- /버스 & /시간표 -->
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                    <div class="flex justify-between items-start">
+                        <div class="space-y-1">
+                            <span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">사용자 핵심 기능</span>
+                            <h4 class="text-lg font-bold text-white">/버스 & /시간표</h4>
+                        </div>
+                        <i class="fa-solid fa-bus-simple text-slate-600 text-xl"></i>
+                    </div>
+                    <ul class="space-y-2 text-xs text-slate-300">
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
+                            <span><b>511번 양방향 도착 안내:</b> 주안역환승정류장 ↔ 정석항공과학고 실시간 잔여시간 계산</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
+                            <span><b>차량번호 교차 추정:</b> 실시간 위치 API 데이터를 비교 분석하여 운행 차량 식별</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
+                            <span><b>개인화 시간표:</b> `timetable.json` 연동을 통한 요일별 수업 시간/강의실 데이터 안내</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 디버그/개발자 툴 -->
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                    <div class="flex justify-between items-start">
+                        <div class="space-y-1">
+                            <span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">개발 및 유지보수</span>
+                            <h4 class="text-lg font-bold text-white">진단 및 디버그 명령어</h4>
+                        </div>
+                        <i class="fa-solid fa-code text-slate-600 text-xl"></i>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+                            <p class="font-mono text-amber-400 font-bold">/버스디버그</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">nodeord, updowncd 순번 및 원본 파싱 확인</p>
+                        </div>
+                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+                            <p class="font-mono text-amber-400 font-bold">/정류소검색</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">키워드 기반 정류소 ID(nodeid) 실시간 조회</p>
+                        </div>
+                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+                            <p class="font-mono text-amber-400 font-bold">/버스위치</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">운행 중 511번 차량의 GPS 및 통과역 추적</p>
+                        </div>
+                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+                            <p class="font-mono text-amber-400 font-bold">/도시코드확인</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">인천 도시코드(23) 및 통신 상태 세션 검증</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 3: Next Step (인천 2호선 지하철 확장) -->
+        <section class="space-y-4">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-6 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-xl font-bold text-white">3. 차세대 확장: 인천2호선 /지하철 연동</h3>
+            </div>
+            <div class="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="space-y-2 max-w-xl">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">TAGO Subway API</span>
+                        <h4 class="text-lg font-bold text-white">국토교통부 지하철도착정보 API 활용</h4>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        별도의 외부 API 키 발급 없이 기존 TAGO 서비스키를 활용하여 인천2호선(주안역, 검암역 등)의 실시간 도착 예정 시간(초/분)을 동일한 파이프라인으로 구현 예정입니다.
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <div class="flex-1 md:flex-none text-center px-4 py-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <p class="text-[10px] text-slate-400">1단계 역코드 조회</p>
+                        <p class="text-xs font-mono font-bold text-indigo-400">getKwrdFnd...</p>
+                    </div>
+                    <i class="fa-solid fa-arrow-right text-slate-600"></i>
+                    <div class="flex-1 md:flex-none text-center px-4 py-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <p class="text-[10px] text-slate-400">2단계 실시간 도착</p>
+                        <p class="text-xs font-mono font-bold text-indigo-400">getSubwaySttn...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
+        <p>© 2026 InhaBot Development Team. Powered by 국토교통부 TAGO Open API.</p>
+    </footer>
 
 </body>
 </html>
