@@ -107,12 +107,92 @@ def load_timetable():
         return {}
 
 
-# 지하철 API / 아직은 임시 데이터 사용
-def get_subway_info(station_name: str):
-    return [
-        {"line": "1호선", "destination": "청량리행 (상행)", "status": "3분 후 도착 (전역 출발)"},
-        {"line": "1호선", "destination": "인천행 (하행)", "status": "8분 후 도착 (2개 전역)"},
+# =============================================================================
+# 📘 국토교통부(TAGO) 지하철정보 서비스 (SubwayInfo) 공식 명세 요약
+# -----------------------------------------------------------------------------
+# ⚠️ 버스 API들과 달리 이건 실시간 도착정보가 아니라 "고정 시간표"(주1회 갱신)다.
+#    그래서 "몇 분 후 도착"이 아니라, 시간표에서 지금 이후의 다음 출발시각을
+#    찾아 현재시각과 비교해 "약 n분 후 출발"로 계산해서 보여준다.
+#
+# 서비스 호스트: https://apis.data.go.kr/1613000/SubwayInfo
+#  1) GetKwrdFndSubwaySttnList(subwayStationName) → subwayStationId 검색
+#  2) GetSubwaySttnAcctoSchdulList(subwayStationId, dailyTypeCode, upDownTypeCode)
+#     → 그 역의 그 요일구분/방향의 전체 고정 시간표(depTime, endSubwayStationNm 등)
+#     dailyTypeCode: 01=평일, 02=토요일, 03=일요일 / upDownTypeCode: U=상행, D=하행
+#     ⚠️ U/D 중 어느 쪽이 "운연 방면"인지는 문서에 안 나와 있어서, 두 방향을
+#        직접 조회해보고 응답의 endSubwayStationNm(종점역명)이 목표 방면과
+#        일치하는 쪽을 골라 쓴다.
+# =============================================================================
+
+INCHEON_LINE2_STATIONS = [
+    ("마전역", "운연"),   # 마전역 → 주안역 (운연 방면)
+    ("주안역", "검단오류"),  # 주안역 → 마전역 (검단오류 방면)
+]
+
+# 역 이름/노선ID 검색 결과 캐시 (역 목록은 자주 안 바뀌므로)
+_subway_station_cache = {}
+
+
+def get_subway_station_matches(station_name: str):
+    """키워드기반 지하철역 목록 조회. 인천 2호선인 항목만 우선 필터링해서 반환."""
+    if station_name in _subway_station_cache:
+        return True, _subway_station_cache[station_name]
+
+    url = f"{TAGO_HOST}/SubwayInfo/GetKwrdFndSubwaySttnList"
+    params = {
+        "serviceKey": BUS_API_KEY,
+        "subwayStationName": station_name,
+        "numOfRows": "20",
+        "pageNo": "1",
+        "_type": "xml",
+    }
+    ok, items = _fetch_tago_xml(url, params)
+    if not ok:
+        return False, items
+
+    line2_matches = [
+        i for i in items
+        if "인천" in i.get("subwayRouteName", "") and "2호선" in i.get("subwayRouteName", "")
     ]
+    result = line2_matches or items  # 인천2호선 필터링 결과가 없으면 전체 결과라도 반환
+    _subway_station_cache[station_name] = result
+    return True, result
+
+
+def get_subway_schedule(station_id: str, daily_type: str, up_down: str):
+    """지하철역별 시간표 목록조회."""
+    url = f"{TAGO_HOST}/SubwayInfo/GetSubwaySttnAcctoSchdulList"
+    params = {
+        "serviceKey": BUS_API_KEY,
+        "subwayStationId": station_id,
+        "dailyTypeCode": daily_type,
+        "upDownTypeCode": up_down,
+        "numOfRows": "300",
+        "pageNo": "1",
+        "_type": "xml",
+    }
+    return _fetch_tago_xml(url, params)
+
+
+def find_direction_schedule(station_id: str, daily_type: str, dest_keyword: str):
+    """U/D 두 방향을 각각 조회해서, 종점역명(endSubwayStationNm)에 목표 방면
+    키워드가 들어있는 쪽을 찾아 그 시간표를 반환한다."""
+    for up_down in ("U", "D"):
+        ok, items = get_subway_schedule(station_id, daily_type, up_down)
+        if not ok:
+            continue
+        if items and dest_keyword in items[0].get("endSubwayStationNm", ""):
+            return True, up_down, items
+    return False, None, f"'{dest_keyword}' 방면 시간표를 찾지 못했습니다."
+
+
+def get_today_daily_type_code():
+    weekday = datetime.datetime.now().weekday()  # 0=월 ... 6=일
+    if weekday == 5:
+        return "02"  # 토요일
+    if weekday == 6:
+        return "03"  # 일요일
+    return "01"  # 평일
 
 
 def _parse_tago_response(xml_bytes):
@@ -375,26 +455,80 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
 
 
 # -------------------------------------------------------------------------------------------
-@bot.tree.command(name="지하철", description="지정한 지하철역의 실시간 도착 정보를 조회합니다.")
-@app_commands.describe(station="조회할 지하철역 이름을 입력하세요 (예: 인천대입구, 부평)")
-async def show_subway(interaction: discord.Interaction, station: str):
-    subway_data = get_subway_info(station)
+@bot.tree.command(name="지하철", description="인천2호선 마전역/주안역의 다음 열차 출발 시간표를 조회합니다.")
+async def show_subway(interaction: discord.Interaction):
+    await interaction.response.defer()
+
+    if not BUS_API_KEY:
+        await interaction.followup.send("⚠️ PUBLIC_BUS_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+        return
+
+    now = datetime.datetime.now()
+    daily_type = get_today_daily_type_code()
+    now_hhmmss = now.strftime("%H%M%S")
+    now_seconds = now.hour * 3600 + now.minute * 60 + now.second
 
     embed = discord.Embed(
-        title=f"🚇 '{station}역' 실시간 도착 정보",
+        title="🚇 인천2호선 다음 열차 시간표",
         color=discord.Color.green(),
-        timestamp=datetime.datetime.now()
+        timestamp=now,
     )
 
-    for info in subway_data:
-        embed.add_field(
-            name=f"[{info['line']}] {info['destination']}",
-            value=f"⏱️ **{info['status']}**",
-            inline=False
-        )
+    for station_name, dest_keyword in INCHEON_LINE2_STATIONS:
+        field_name = f"[{station_name} → {dest_keyword} 방면]"
 
-    embed.set_footer(text="⚠️ 현재 임시(Mock) 데이터입니다. 실 API 연동 예정 | V1.1")
-    await interaction.response.send_message(embed=embed)
+        ok, matches = get_subway_station_matches(station_name)
+        if not ok or not matches:
+            embed.add_field(name=field_name, value="⚠️ 역 정보를 찾지 못했습니다.", inline=False)
+            continue
+
+        station_id = matches[0].get("subwayStationId", "")
+        ok, up_down, result = find_direction_schedule(station_id, daily_type, dest_keyword)
+        if not ok:
+            embed.add_field(name=field_name, value=f"⚠️ {result}", inline=False)
+            continue
+
+        upcoming = [it for it in result if it.get("depTime", "").isdigit() and it["depTime"] >= now_hhmmss]
+        upcoming.sort(key=lambda it: it["depTime"])
+
+        if not upcoming:
+            embed.add_field(name=field_name, value="오늘 남은 열차가 없습니다.", inline=False)
+            continue
+
+        lines = []
+        for it in upcoming[:3]:
+            dep = it["depTime"]
+            h, m = dep[0:2], dep[2:4]
+            dep_seconds = int(dep[0:2]) * 3600 + int(dep[2:4]) * 60 + int(dep[4:6])
+            remain_min = max((dep_seconds - now_seconds) // 60, 0)
+            end_name = it.get("endSubwayStationNm", "")
+            lines.append(f"**{h}:{m} 출발** (약 {remain_min}분 후) · {end_name}행")
+
+        embed.add_field(name=field_name, value="\n".join(lines), inline=False)
+
+    embed.set_footer(text="국토교통부(TAGO) 지하철정보 API 기반 · 실시간 도착정보가 아닌 고정 시간표(주1회 갱신)입니다")
+    await interaction.followup.send(embed=embed)
+
+
+# --- 🔍 /지하철역검색 명령어: 이름으로 지하철역ID 검색 ---
+@bot.tree.command(name="지하철역검색", description="[개발용] 지하철역 이름으로 subwayStationId를 검색합니다.")
+@app_commands.describe(keyword="검색할 역 이름 (예: 마전역, 주안역)")
+async def subway_station_search(interaction: discord.Interaction, keyword: str):
+    await interaction.response.defer()
+
+    ok, result = get_subway_station_matches(keyword)
+    if not ok:
+        await interaction.followup.send(f"⚠️ 조회 실패: {result}")
+        return
+    if not result:
+        await interaction.followup.send(f"'{keyword}'로 검색된 역이 없습니다.")
+        return
+
+    lines = [
+        f"{i.get('subwayStationName', '')} ({i.get('subwayRouteName', '')}) → id={i.get('subwayStationId', '')}"
+        for i in result[:20]
+    ]
+    await interaction.followup.send("🔍 검색 결과:\n" + "\n".join(lines))
 
 
 # --- 🚌 /버스 명령어: 511번 버스, 양방향 정류장 실시간 도착 "분" 정보 ---
