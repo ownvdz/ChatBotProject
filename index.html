@@ -11,100 +11,102 @@
 
     <!-- Header Navigation -->
     <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
-        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/30">
+        <div class="max-w-6xl mx-auto px-8 py-5 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-indigo-500/30">
                     <i class="fa-solid fa-robot"></i>
                 </div>
                 <div>
-                    <h1 class="font-bold text-lg leading-tight">ChatBotProject</h1>
-                    <p class="text-xs text-slate-400">프로젝트 진행 상황 발표</p>
+                    <h1 class="font-bold text-xl leading-tight">ChatBotProject</h1>
+                    <p class="text-sm text-slate-400">프로젝트 진행 상황 발표</p>
                 </div>
             </div>
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="px-4 py-1.5 rounded-full text-sm font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 Oracle Cloud 24/7 Active
             </span>
         </div>
     </header>
 
     <!-- Main Presentation Stream (Long Scroll Format) -->
-    <main class="max-w-5xl mx-auto px-6 py-12 space-y-20">
+    <main class="max-w-6xl mx-auto px-8 py-12 space-y-[60vh]">
 
         <!-- Cover / Banner Section -->
-        <section class="rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/30 p-10 relative overflow-hidden shadow-2xl">
-            <div class="absolute -right-12 -bottom-12 opacity-10 text-indigo-400 text-9xl pointer-events-none">
-                <i class="fa-solid fa-server"></i>
-            </div>
-            <div class="relative z-10 space-y-4 max-w-2xl">
-                <span class="px-3 py-1 rounded-md text-xs uppercase tracking-widest text-indigo-300 font-bold bg-indigo-500/20 border border-indigo-500/30">Project Progress Report</span>
-                <h2 class="text-4xl font-extrabold tracking-tight text-white leading-tight">
-                    공공데이터 API 완전 전환 및 <br>
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Oracle Cloud 24시간 배포 구축</span>
-                </h2>
-                <p class="text-slate-300 text-sm leading-relaxed pt-2">
-                    기존 로컬 실행 방식의 한계를 극복하고, 국토교통부(TAGO) 표준 API 적용과 오라클 클라우드 VPS 영구 배포를 완료하였습니다. 안정적인 24/7 운용 인프라 위에 향후 커스터마이징 기능 확장을 목표로 합니다.
-                </p>
+        <section class="min-h-[70vh] flex flex-col justify-center">
+            <div class="rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/30 p-12 relative overflow-hidden shadow-2xl">
+                <div class="absolute -right-12 -bottom-12 opacity-10 text-indigo-400 text-[12rem] pointer-events-none">
+                    <i class="fa-solid fa-code"></i>
+                </div>
+                <div class="relative z-10 space-y-6 max-w-3xl">
+                    <span class="px-4 py-1.5 rounded-md text-sm uppercase tracking-widest text-indigo-300 font-bold bg-indigo-500/20 border border-indigo-500/30">Project Progress Overview</span>
+                    <h2 class="text-5xl font-extrabold tracking-tight text-white leading-tight">
+                        디스코드 챗봇 프로젝트 <br>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">주요 진행 상황 및 고도화 보고</span>
+                    </h2>
+                    <p class="text-slate-300 text-lg leading-relaxed pt-2">
+                        본 발표에서는 디스코드 챗봇의 핵심 데이터 연동 방식 개선, 서버 아키텍처 환경 변화, 그리고 지속 가능한 서비스를 위한 단계별 개발 로드맵을 순서대로 공유합니다.
+                    </p>
+                </div>
             </div>
         </section>
 
         <!-- Section 1: API 전환 및 명령어 고도화 -->
-        <section class="space-y-6">
-            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
-                <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-2xl font-bold text-white">공공데이터 API 전환 완료</h3>
+        <section class="min-h-[70vh] flex flex-col justify-center space-y-8">
+            <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-3xl font-bold text-white">공공데이터 API 전환 완료</h3>
             </div>
-            <p class="text-slate-400 text-sm">
+            <p class="text-slate-300 text-base">
                 더미 데이터를 사용했던 기존과 달리, 국토교통부(TAGO) 표준 Open API 파이프라인으로 교체하여 실시간 데이터를 기반으로 응답할 수 있게 되었습니다.
             </p>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- /버스 명령어 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition space-y-4">
+                <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition space-y-5">
                     <div class="flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-lg">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-2xl">
                                 <i class="fa-solid fa-bus"></i>
                             </div>
-                            <h4 class="text-xl font-bold text-white">/버스 명령어</h4>
+                            <h4 class="text-2xl font-bold text-white">/버스 명령어</h4>
                         </div>
-                        <span class="text-xs px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 font-mono">ArvlInfoInqireService</span>
+                        <span class="text-xs px-3 py-1.5 rounded bg-blue-500/10 text-blue-400 font-mono font-semibold">ArvlInfoInqireService</span>
                     </div>
-                    <ul class="space-y-2.5 text-xs text-slate-300">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
-                            <span><b>511번 버스 양방향 실시간 안내:</b> 주안역환승정류장 및 정석항공과학고 정류장의 도착 예정 시간(분) 제공</span>
+                    <ul class="space-y-3 text-sm text-slate-300 leading-relaxed">
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-check text-indigo-400 mt-1 text-base"></i>
+                            <span><b class="text-white">511번 버스 양방향 실시간 안내:</b> 주안역환승정류장 및 정석항공과학고 정류장의 도착 예정 시간(분) 제공</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
-                            <span><b>차량번호 교차 추정 알고리즘:</b> 도착 정보와 노선 위치 GPS API 데이터를 교차 검증하여 예상 운행 차량 번호 매칭</span>
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-check text-indigo-400 mt-1 text-base"></i>
+                            <span><b class="text-white">차량번호 교차 추정 알고리즘:</b> 도착 정보와 노선 위치 GPS API 데이터를 교차 검증하여 예상 운행 차량 번호 매칭</span>
                         </li>
                     </ul>
                 </div>
 
                 <!-- /지하철 명령어 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition space-y-4">
+                <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition space-y-5">
                     <div class="flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-2xl">
                                 <i class="fa-solid fa-train-subway"></i>
                             </div>
-                            <h4 class="text-xl font-bold text-white">/지하철 명령어</h4>
+                            <h4 class="text-2xl font-bold text-white">/지하철 명령어</h4>
                         </div>
-                        <span class="text-xs px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 font-mono">SubwayInfoService</span>
+                        <span class="text-xs px-3 py-1.5 rounded bg-emerald-500/10 text-emerald-400 font-mono font-semibold">SubwayInfoService</span>
                     </div>
-                    <ul class="space-y-2.5 text-xs text-slate-300">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
-                            <span><b>인천2호선 맞춤 연동:</b> 마전역(운연 방면) 및 주안역(검단오류 방면) 등 주요 이용 노선 정보제공</span>
+                    <ul class="space-y-3 text-sm text-slate-300 leading-relaxed">
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-check text-emerald-400 mt-1 text-base"></i>
+                            <span><b class="text-white">인천2호선 맞춤 연동:</b> 마전역(운연 방면) 및 주안역(검단오류 방면) 등 주요 이용 노선 정보제공</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
-                            <span><b>시간표 기반 남은 시간 계산:</b> 정시성이 높은 시간표 데이터를 파싱하여 현재 시간 기준 "N분 후 출발" 자동 계산</span>
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-check text-emerald-400 mt-1 text-base"></i>
+                            <span><b class="text-white">시간표 기반 남은 시간 계산:</b> 정시성이 높은 시간표 데이터를 파싱하여 현재 시간 기준 "N분 후 출발" 자동 계산</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
-                            <span><b>인증키 통일:</b> 버스 API와 동일한 TAGO 통합 키를 사용해 별도 발급 없는 효율적 구조</span>
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-check text-emerald-400 mt-1 text-base"></i>
+                            <span><b class="text-white">인증키 통일:</b> 버스 API와 동일한 TAGO 통합 키를 사용해 별도 발급 없는 효율적 구조</span>
                         </li>
                     </ul>
                 </div>
@@ -112,92 +114,92 @@
         </section>
 
         <!-- Section 2: 서버 환경 변화 및 오라클 클라우드 구축 -->
-        <section class="space-y-6">
-            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
-                <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-2xl font-bold text-white">서버 인프라: Oracle Cloud 24시간 무중단 환경 구축</h3>
+        <section class="min-h-[70vh] flex flex-col justify-center space-y-8">
+            <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-3xl font-bold text-white">서버 인프라: Oracle Cloud 24시간 무중단 환경 구축</h3>
             </div>
 
             <!-- Before vs After 비교 카드 -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- 지난 시연 (Before) -->
-                <div class="p-6 rounded-2xl bg-rose-950/20 border border-rose-500/20 space-y-3">
+                <div class="p-8 rounded-2xl bg-rose-950/20 border border-rose-500/20 space-y-4">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-rose-400">지난 시연 방식 (Before)</span>
-                        <i class="fa-solid fa-laptop text-rose-400 text-lg"></i>
+                        <span class="text-sm font-bold uppercase tracking-wider text-rose-400">지난 시연 방식 (Before)</span>
+                        <i class="fa-solid fa-laptop text-rose-400 text-2xl"></i>
                     </div>
-                    <h4 class="text-lg font-bold text-slate-200">개인 노트북 로컬 실행</h4>
-                    <p class="text-xs text-slate-400 leading-relaxed">
+                    <h4 class="text-xl font-bold text-slate-100">개인 노트북 로컬 실행</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
                         노트북에서 파이썬 코드를 직접 실행하여 시연 진행. 노트북 덮개를 닫거나 절전 모드 진입 시 봇이 즉시 종료되며, 네트워크 환경 변화에 매우 취약한 단점 존재.
                     </p>
                 </div>
 
                 <!-- 현재 상태 (After) -->
-                <div class="p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 space-y-3">
+                <div class="p-8 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 space-y-4">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">현재 구축 방식 (After)</span>
-                        <i class="fa-solid fa-cloud text-emerald-400 text-lg"></i>
+                        <span class="text-sm font-bold uppercase tracking-wider text-emerald-400">현재 구축 방식 (After)</span>
+                        <i class="fa-solid fa-cloud text-emerald-400 text-2xl"></i>
                     </div>
-                    <h4 class="text-lg font-bold text-slate-200">Oracle Cloud를 통한 상시 가동</h4>
-                    <p class="text-xs text-slate-400 leading-relaxed">
+                    <h4 class="text-xl font-bold text-slate-100">Oracle Cloud를 통한 상시 가동</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
                         오라클 클라우드 우분투(Ubuntu 22.04 LTS) 인스턴스 구축 완료. 개인 PC를 꺼도 24시간 365일 디스코드 채널에서 끊김 없는 서비스 제공 가능.
                     </p>
                 </div>
             </div>
 
             <!-- 세부 기술 스택 카드 -->
-            <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                <h4 class="font-bold text-white text-base flex items-center gap-2">
-                    <i class="fa-solid fa-gear text-indigo-400"></i> 클라우드 인프라 세부 구성 요소
+            <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
+                <h4 class="font-bold text-white text-xl flex items-center gap-3">
+                    <i class="fa-solid fa-gear text-indigo-400 text-2xl"></i> 클라우드 인프라 세부 구성 요소
                 </h4>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
-                        <p class="font-bold text-indigo-400">systemd 데몬 프로세스</p>
-                        <p class="text-slate-400">`chatbot.service` 등록을 통해 서버 재부팅 및 봇 비정상 종료 시 5초 내 자동 재시작 구현</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
+                    <div class="p-5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-2">
+                        <p class="font-bold text-indigo-400 text-base">systemd 데몬 프로세스</p>
+                        <p class="text-slate-300 leading-relaxed">`chatbot.service` 등록을 통해 서버 재부팅 및 봇 비정상 종료 시 5초 내 자동 재시작 구현</p>
                     </div>
-                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
-                        <p class="font-bold text-indigo-400">KST (Asia/Seoul) 동기화</p>
-                        <p class="text-slate-400">서버 타임존을 한국 시간으로 고정하여 버스/지하철 시간표 파싱 및 시간 계산 오류 원천 차단</p>
+                    <div class="p-5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-2">
+                        <p class="font-bold text-indigo-400 text-base">KST (Asia/Seoul) 동기화</p>
+                        <p class="text-slate-300 leading-relaxed">서버 타임존을 한국 시간으로 고정하여 버스/지하철 시간표 파싱 및 시간 계산 오류 원천 차단</p>
                     </div>
-                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
-                        <p class="font-bold text-indigo-400">VNIC 및 보안망 구성</p>
-                        <p class="text-slate-400">오라클 VNIC 설정을 통한 고정 Public IP 바인딩 및 독립된 보안 그룹 구성을 통한 안전한 통신</p>
+                    <div class="p-5 rounded-xl bg-slate-950 border border-slate-800/80 space-y-2">
+                        <p class="font-bold text-indigo-400 text-base">VNIC 및 보안망 구성</p>
+                        <p class="text-slate-300 leading-relaxed">오라클 VNIC 설정을 통한 고정 Public IP 바인딩 및 독립된 보안 그룹 구성을 통한 안전한 통신</p>
                     </div>
                 </div>
             </div>
         </section>
 
         <!-- Section 3: 앞으로의 목표 (Future Roadmap) -->
-        <section class="space-y-6">
-            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
-                <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-2xl font-bold text-white">향후 발전 목표</h3>
+        <section class="min-h-[70vh] flex flex-col justify-center space-y-8 pb-20">
+            <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-3xl font-bold text-white">향후 발전 목표</h3>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <!-- 목표 1: DB 연동 & 시간표 CRUD -->
-                <div class="p-6 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-3 relative overflow-hidden">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">01</div>
-                    <h4 class="font-bold text-white">시간표 데이터베이스 연동 및 CRUD</h4>
-                    <p class="text-xs text-slate-400 leading-normal">
+                <div class="p-8 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-4 relative overflow-hidden">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">01</div>
+                    <h4 class="font-bold text-white text-xl">시간표 데이터베이스 연동 및 CRUD</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
                         기존 고정 `timetable.json` 방식에서 데이터베이스 연동 방식으로 전환하여, 사용자가 직접 슬래시 명령어로 수업을 추가/수정/삭제(CRUD)할 수 있도록 구현
                     </p>
                 </div>
 
                 <!-- 목표 2: 버스/지하철 즐겨찾기 CRUD -->
-                <div class="p-6 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-3 relative overflow-hidden">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">02</div>
-                    <h4 class="font-bold text-white">교통 정보 커스텀 즐겨찾기</h4>
-                    <p class="text-xs text-slate-400 leading-normal">
+                <div class="p-8 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-4 relative overflow-hidden">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">02</div>
+                    <h4 class="font-bold text-white text-xl">교통 정보 커스텀 즐겨찾기</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
                         511번 버스 외에 학생 개인별 자주 이용하는 버스 정류장 및 지하철역을 개인 DB에 등록하고 관리할 수 있는 사용자 맞춤형 조회 기능 제공
                     </p>
                 </div>
 
                 <!-- 목표 3: 학점계산기 기능 -->
-                <div class="p-6 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-3 relative overflow-hidden">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">03</div>
-                    <h4 class="font-bold text-white">학생 맞춤형 학점 계산기 추가</h4>
-                    <p class="text-xs text-slate-400 leading-normal">
+                <div class="p-8 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-4 relative overflow-hidden">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">03</div>
+                    <h4 class="font-bold text-white text-xl">학생 맞춤형 학점 계산기 추가</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
                         수강 과목별 학점과 성적을 입력 받아 평점, 졸업에 필요한 전공 및 교양 학점 등에 대한 정보를 제공하는 기능 개발
                     </p>
                 </div>
@@ -207,8 +209,8 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t border-slate-800 py-8 text-center text-xs text-slate-500">
-        <div class="max-w-5xl mx-auto px-6 space-y-2">
+    <footer class="border-t border-slate-800 py-10 text-center text-sm text-slate-500">
+        <div class="max-w-6xl mx-auto px-8 space-y-2">
             <p>© 2026 ChatBot Development Team. All rights reserved.</p>
             <p class="text-slate-600">Powered by Oracle Cloud Infrastructure & 국토교통부 TAGO Open API</p>
         </div>
