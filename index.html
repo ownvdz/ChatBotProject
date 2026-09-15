@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>인하대 디스코드 봇 - API 전환 및 24/7 클라우드 배포 발표</title>
+    <title>개인용 디스코드 봇 - API 전환 및 24/7 클라우드 배포 발표</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -17,8 +17,8 @@
                     <i class="fa-solid fa-robot"></i>
                 </div>
                 <div>
-                    <h1 class="font-bold text-lg leading-tight">InhaBot Project</h1>
-                    <p class="text-xs text-slate-400">최종 프로젝트 진행 상황 및 성과 발표</p>
+                    <h1 class="font-bold text-lg leading-tight">ChatBotProject</h1>
+                    <p class="text-xs text-slate-400">프로젝트 진행 상황 발표</p>
                 </div>
             </div>
             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
@@ -52,10 +52,10 @@
         <section class="space-y-6">
             <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
                 <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-2xl font-bold text-white">1. 핵심 기능: 공공데이터 API 전환 완료</h3>
+                <h3 class="text-2xl font-bold text-white">공공데이터 API 전환 완료</h3>
             </div>
             <p class="text-slate-400 text-sm">
-                불안정했던 기존 데이터 수집 방식을 폐기하고, 국토교통부(TAGO) 표준 Open API 파이프라인으로 전면 교체하여 데이터 신뢰성과 응답 속도를 크게 향상시켰습니다.
+                더미 데이터를 사용했던 기존과 달리, 국토교통부(TAGO) 표준 Open API 파이프라인으로 교체하여 실시간 데이터를 기반으로 응답할 수 있게 되었습니다.
             </p>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -79,10 +79,6 @@
                             <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
                             <span><b>차량번호 교차 추정 알고리즘:</b> 도착 정보와 노선 위치 GPS API 데이터를 교차 검증하여 예상 운행 차량 번호 매칭</span>
                         </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
-                            <span><b>예외 처리 및 재시도:</b> TAGO 게이트웨이 일시적 오류 발생 시 자동 Retry 로직 및 `00` 정상 코드 검증 구현</span>
-                        </li>
                     </ul>
                 </div>
 
@@ -100,7 +96,7 @@
                     <ul class="space-y-2.5 text-xs text-slate-300">
                         <li class="flex items-start gap-2">
                             <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
-                            <span><b>인천2호선 맞춤 연동:</b> 마전역(운연 방면) 및 주안역(검단오류 방면) 등 주요 이용 노선 최적화</span>
+                            <span><b>인천2호선 맞춤 연동:</b> 마전역(운연 방면) 및 주안역(검단오류 방면) 등 주요 이용 노선 정보제공</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
@@ -108,7 +104,7 @@
                         </li>
                         <li class="flex items-start gap-2">
                             <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
-                            <span><b>인증키 통일:</b> 버스 API와 동일한 TAGO 통합 `serviceKey`를 사용해 별도 발급 없는 효율적 구조 마련</span>
+                            <span><b>인증키 통일:</b> 버스 API와 동일한 TAGO 통합 키를 사용해 별도 발급 없는 효율적 구조</span>
                         </li>
                     </ul>
                 </div>
@@ -119,7 +115,7 @@
         <section class="space-y-6">
             <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
                 <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-2xl font-bold text-white">2. 서버 인프라: Oracle Cloud 24시간 무중단 환경 구축</h3>
+                <h3 class="text-2xl font-bold text-white">서버 인프라: Oracle Cloud 24시간 무중단 환경 구축</h3>
             </div>
 
             <!-- Before vs After 비교 카드 -->
@@ -142,7 +138,7 @@
                         <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">현재 구축 방식 (After)</span>
                         <i class="fa-solid fa-cloud text-emerald-400 text-lg"></i>
                     </div>
-                    <h4 class="text-lg font-bold text-slate-200">Oracle Cloud VPS 상시 가동</h4>
+                    <h4 class="text-lg font-bold text-slate-200">Oracle Cloud를 통한 상시 가동</h4>
                     <p class="text-xs text-slate-400 leading-relaxed">
                         오라클 클라우드 우분투(Ubuntu 22.04 LTS) 인스턴스 구축 완료. 개인 PC를 꺼도 24시간 365일 디스코드 채널에서 끊김 없는 서비스 제공 가능.
                     </p>
@@ -175,11 +171,8 @@
         <section class="space-y-6">
             <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
                 <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-2xl font-bold text-white">3. 향후 발전 목표 (Future Roadmap)</h3>
+                <h3 class="text-2xl font-bold text-white">향후 발전 목표</h3>
             </div>
-            <p class="text-slate-400 text-sm">
-                단순 조회 중심의 서비스에서 사용자 맞춤형 데이터를 저장하고 관리할 수 있는 능동형 학생 지원 플랫폼으로 확장할 예정입니다.
-            </p>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- 목표 1: DB 연동 & 시간표 CRUD -->
@@ -187,7 +180,7 @@
                     <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">01</div>
                     <h4 class="font-bold text-white">시간표 데이터베이스 연동 및 CRUD</h4>
                     <p class="text-xs text-slate-400 leading-normal">
-                        기존 고정 `timetable.json` 방식에서 데이터베이스(SQLite/PostgreSQL) 연동 방식으로 전환하여, 사용자가 직접 슬래시 명령어로 수업을 추가/수정/삭제(CRUD)할 수 있도록 구현
+                        기존 고정 `timetable.json` 방식에서 데이터베이스 연동 방식으로 전환하여, 사용자가 직접 슬래시 명령어로 수업을 추가/수정/삭제(CRUD)할 수 있도록 구현
                     </p>
                 </div>
 
@@ -205,7 +198,7 @@
                     <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">03</div>
                     <h4 class="font-bold text-white">학생 맞춤형 학점 계산기 추가</h4>
                     <p class="text-xs text-slate-400 leading-normal">
-                        수강 과목별 학점(Credit)과 성적(Grade)을 입력 받아 이수 학점, 전공 평점, 전체 GPA를 자동 산출하고 목표 학점을 관리할 수 있는 시뮬레이션 기능 개발
+                        수강 과목별 학점과 성적을 입력 받아 평점, 졸업에 필요한 전공 및 교양 학점 등에 대한 정보를 제공하는 기능 개발
                     </p>
                 </div>
             </div>
@@ -216,7 +209,7 @@
     <!-- Footer -->
     <footer class="border-t border-slate-800 py-8 text-center text-xs text-slate-500">
         <div class="max-w-5xl mx-auto px-6 space-y-2">
-            <p>© 2026 InhaBot Development Team. All rights reserved.</p>
+            <p>© 2026 ChatBot Development Team. All rights reserved.</p>
             <p class="text-slate-600">Powered by Oracle Cloud Infrastructure & 국토교통부 TAGO Open API</p>
         </div>
     </footer>
