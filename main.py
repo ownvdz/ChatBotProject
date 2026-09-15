@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import asyncio
 import datetime
 import requests
 import xml.etree.ElementTree as ET
@@ -49,18 +50,6 @@ TAGO_HOST = "https://apis.data.go.kr/1613000"
 
 DEFAULT_CITY_CODE = os.getenv("BUS_CITY_CODE", "23")
 DEFAULT_ROUTE_ID = os.getenv("BUS_ROUTE_ID", "ICB365000073")
-
-# 511번 버스의 실제 경유 정류장 순서 (사용자 제공, 확인용/디버깅용 참고 데이터)
-# 방향1: 주안역환승정류장 → 정석항공과학고
-ROUTE_511_DIRECTION_1 = [
-    "주안역환승정류장", "주안1동행정복지센터", "도화IC", "인천광역시종합건설본부",
-    "대명아파트", "인천기계공고", "용일사거리", "제운사거리", "학산소극장", "정석항공과학고",
-]
-# 방향2: 정석항공과학고 → 주안역환승정류장
-ROUTE_511_DIRECTION_2 = [
-    "정석항공과학고", "학산소극장", "제운사거리", "용일사거리", "인천기계공고",
-    "주안센트럴파라곤아파트", "제일시장", "주안사거리", "교보생명", "주안역환승정류장",
-]
 
 # 실시간 도착정보를 조회할 목표 정류장 (양방향 종점)
 TARGET_STATION_NAMES = ["주안역환승정류장", "정석항공과학고"]
@@ -514,7 +503,7 @@ async def show_subway(interaction: discord.Interaction):
     for station_name, dest_keyword in INCHEON_LINE2_STATIONS:
         field_name = f"[{station_name} → {dest_keyword} 방면]"
 
-        ok, matches = get_subway_station_matches(station_name)
+        ok, matches = await asyncio.to_thread(get_subway_station_matches, station_name)
         if not ok:
             embed.add_field(name=field_name, value=f"⚠️ 조회 실패: {matches}", inline=False)
             continue
@@ -523,7 +512,7 @@ async def show_subway(interaction: discord.Interaction):
             continue
 
         station_id = matches[0].get("subwayStationId", "")
-        ok, result = get_schedule_towards(station_id, daily_type, dest_keyword)
+        ok, result = await asyncio.to_thread(get_schedule_towards, station_id, daily_type, dest_keyword)
         if not ok:
             embed.add_field(name=field_name, value=f"⚠️ {result}", inline=False)
             continue
@@ -556,7 +545,7 @@ async def show_subway(interaction: discord.Interaction):
 async def subway_station_search(interaction: discord.Interaction, keyword: str):
     await interaction.response.defer()
 
-    ok, result = get_subway_station_matches(keyword)
+    ok, result = await asyncio.to_thread(get_subway_station_matches, keyword)
     if not ok:
         await interaction.followup.send(f"⚠️ 조회 실패: {result}")
         return
@@ -580,13 +569,13 @@ async def bus(interaction: discord.Interaction):
         await interaction.followup.send("⚠️ PUBLIC_TAGO_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
         return
 
-    ok, stops = get_cached_route_stops(DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
+    ok, stops = await asyncio.to_thread(get_cached_route_stops, DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
     if not ok:
         await interaction.followup.send(f"⚠️ 노선 정류소 목록 조회 실패: {stops}")
         return
 
     # 차량번호는 도착정보 API엔 없고 위치정보 API에만 있어서, 한 번만 받아와 매칭에 사용한다.
-    loc_ok, location_items = get_route_bus_locations(DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
+    loc_ok, location_items = await asyncio.to_thread(get_route_bus_locations, DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
     if not loc_ok:
         location_items = []  # 위치정보 실패해도 도착시간 정보는 계속 보여준다
     name_to_nodeords = build_name_to_nodeords(stops)
@@ -626,7 +615,7 @@ async def bus(interaction: discord.Interaction):
             node_id = stop_record.get("nodeid", "")
             node_ord = stop_record.get("nodeord", "?")
 
-            ok, arrivals = get_arrival_info(DEFAULT_CITY_CODE, node_id, DEFAULT_ROUTE_ID)
+            ok, arrivals = await asyncio.to_thread(get_arrival_info, DEFAULT_CITY_CODE, node_id, DEFAULT_ROUTE_ID)
             field_name = f"📍 {station_name}"
 
             if not ok:
@@ -666,7 +655,7 @@ async def bus(interaction: discord.Interaction):
 async def bus_debug(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    ok, stops = get_cached_route_stops(DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID, force_refresh=True)
+    ok, stops = await asyncio.to_thread(get_cached_route_stops, DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID, force_refresh=True)
     if not ok:
         await interaction.followup.send(f"⚠️ 조회 실패: {stops}")
         return
@@ -698,7 +687,7 @@ async def bus_debug(interaction: discord.Interaction):
 async def station_search(interaction: discord.Interaction, keyword: str):
     await interaction.response.defer()
 
-    ok, result = search_stations_by_name(DEFAULT_CITY_CODE, keyword)
+    ok, result = await asyncio.to_thread(search_stations_by_name, DEFAULT_CITY_CODE, keyword)
     if not ok:
         await interaction.followup.send(f"⚠️ 조회 실패: {result}")
         return
@@ -715,7 +704,7 @@ async def station_search(interaction: discord.Interaction, keyword: str):
 async def bus_location(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    ok, result = get_route_bus_locations(DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
+    ok, result = await asyncio.to_thread(get_route_bus_locations, DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
     if not ok:
         await interaction.followup.send(f"⚠️ 조회 실패: {result}")
         return
@@ -740,7 +729,7 @@ async def bus_location(interaction: discord.Interaction):
 async def city_code_check(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    ok, result = get_city_code_list()
+    ok, result = await asyncio.to_thread(get_city_code_list)
     if not ok:
         await interaction.followup.send(f"⚠️ 조회 실패: {result}")
         return
