@@ -3,174 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>인하대 디스코드 봇 - API 전환 및 기능 고도화 발표</title>
+    <title>인하대 디스코드 봇 - API 전환 및 24/7 클라우드 배포 발표</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
 
-    <!-- Header Section -->
-    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/30">
                     <i class="fa-solid fa-robot"></i>
                 </div>
                 <div>
-                    <h1 class="font-bold text-lg leading-tight">InhaBot v2.0 Update</h1>
-                    <p class="text-xs text-slate-400">TAGO API 전환 및 신규 기능 발표</p>
+                    <h1 class="font-bold text-lg leading-tight">InhaBot Project</h1>
+                    <p class="text-xs text-slate-400">최종 프로젝트 진행 상황 및 성과 발표</p>
                 </div>
             </div>
-            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <i class="fa-solid fa-circle-check mr-1"></i> System Stable
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Oracle Cloud 24/7 Active
             </span>
         </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-10 space-y-12">
+    <!-- Main Presentation Stream (Long Scroll Format) -->
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-20">
 
-        <!-- Banner / Summary -->
-        <section class="rounded-2xl bg-gradient-to-r from-indigo-900/50 via-slate-900 to-slate-900 border border-indigo-500/20 p-8 relative overflow-hidden">
-            <div class="absolute -right-10 -bottom-10 opacity-10 text-indigo-400 text-9xl">
-                <i class="fa-solid fa-bus"></i>
+        <!-- Cover / Banner Section -->
+        <section class="rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/30 p-10 relative overflow-hidden shadow-2xl">
+            <div class="absolute -right-12 -bottom-12 opacity-10 text-indigo-400 text-9xl pointer-events-none">
+                <i class="fa-solid fa-server"></i>
             </div>
-            <div class="relative z-10 max-w-2xl space-y-4">
-                <span class="text-xs uppercase tracking-widest text-indigo-400 font-bold">Project Milestone</span>
-                <h2 class="text-3xl font-extrabold tracking-tight text-white">국토교통부 TAGO API 통합 및 <br><span class="text-indigo-400">지하철 확장 아키텍처</span> 구축</h2>
-                <p class="text-slate-300 text-sm leading-relaxed">
-                    기존 버스 API 오류를 완벽히 해결하기 위해 국토교통부(TAGO) 표준 공공데이터 API로 표준화하였습니다. 
-                    더불어 실시간 버스 추적, 디버그 시스템, 학생용 시간표 기능, 그리고 인천2호선 지하철 확장 기반을 마련했습니다.
+            <div class="relative z-10 space-y-4 max-w-2xl">
+                <span class="px-3 py-1 rounded-md text-xs uppercase tracking-widest text-indigo-300 font-bold bg-indigo-500/20 border border-indigo-500/30">Project Progress Report</span>
+                <h2 class="text-4xl font-extrabold tracking-tight text-white leading-tight">
+                    공공데이터 API 완전 전환 및 <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Oracle Cloud 24시간 배포 구축</span>
+                </h2>
+                <p class="text-slate-300 text-sm leading-relaxed pt-2">
+                    기존 로컬 실행 방식의 한계를 극복하고, 국토교통부(TAGO) 표준 API 적용과 오라클 클라우드 VPS 영구 배포를 완료하였습니다. 안정적인 24/7 운용 인프라 위에 향후 커스터마이징 기능 확장을 목표로 합니다.
                 </p>
             </div>
         </section>
 
-        <!-- Slide 1: TAGO API 전환 핵심 배경 -->
-        <section class="space-y-4">
-            <div class="flex items-center gap-2">
-                <span class="w-2.5 h-6 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-xl font-bold text-white">1. 버스 API 엔진 교체 (TAGO 공통 API)</h3>
+        <!-- Section 1: API 전환 및 명령어 고도화 -->
+        <section class="space-y-6">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-2xl font-bold text-white">1. 핵심 기능: 공공데이터 API 전환 완료</h3>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
-                        <i class="fa-solid fa-shield-halved"></i>
-                    </div>
-                    <h4 class="font-bold text-slate-200">높은 안정성 확보</h4>
-                    <p class="text-xs text-slate-400 leading-normal">
-                        국토교통부(`apis.data.go.kr/1613000`) 연동을 통해 기존 비표준 API의 데이터 유실 문제를 완전 해소
-                    </p>
-                </div>
-                <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
-                        <i class="fa-solid fa-rotate-right"></i>
-                    </div>
-                    <h4 class="font-bold text-slate-200">자동 재시도 로직</h4>
-                    <p class="text-xs text-slate-400 leading-normal">
-                        XML 파싱 및 일시적 응답 지연에 대비한 Retry 알고리즘 적용으로 정상 성공 코드(`00`) 검증 강화
-                    </p>
-                </div>
-                <div class="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
-                        <i class="fa-solid fa-key"></i>
-                    </div>
-                    <h4 class="font-bold text-slate-200">단일 ServiceKey 모듈화</h4>
-                    <p class="text-xs text-slate-400 leading-normal">
-                        하나의 공공데이터 Key로 버스 및 지하철정보 서비스(`SubwayInfoService`)까지 확장 가능한 인프라 구축
-                    </p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Slide 2: 주요 명령어 및 업데이트 내역 -->
-        <section class="space-y-4">
-            <div class="flex items-center gap-2">
-                <span class="w-2.5 h-6 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-xl font-bold text-white">2. 신규 및 고도화된 디스코드 명령어</h3>
-            </div>
+            <p class="text-slate-400 text-sm">
+                불안정했던 기존 데이터 수집 방식을 폐기하고, 국토교통부(TAGO) 표준 Open API 파이프라인으로 전면 교체하여 데이터 신뢰성과 응답 속도를 크게 향상시켰습니다.
+            </p>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- /버스 & /시간표 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                    <div class="flex justify-between items-start">
-                        <div class="space-y-1">
-                            <span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">사용자 핵심 기능</span>
-                            <h4 class="text-lg font-bold text-white">/버스 & /시간표</h4>
+                <!-- /버스 명령어 -->
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition space-y-4">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-bus"></i>
+                            </div>
+                            <h4 class="text-xl font-bold text-white">/버스 명령어</h4>
                         </div>
-                        <i class="fa-solid fa-bus-simple text-slate-600 text-xl"></i>
+                        <span class="text-xs px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 font-mono">ArvlInfoInqireService</span>
                     </div>
-                    <ul class="space-y-2 text-xs text-slate-300">
+                    <ul class="space-y-2.5 text-xs text-slate-300">
                         <li class="flex items-start gap-2">
                             <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
-                            <span><b>511번 양방향 도착 안내:</b> 주안역환승정류장 ↔ 정석항공과학고 실시간 잔여시간 계산</span>
+                            <span><b>511번 버스 양방향 실시간 안내:</b> 주안역환승정류장 및 정석항공과학고 정류장의 도착 예정 시간(분) 제공</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
-                            <span><b>차량번호 교차 추정:</b> 실시간 위치 API 데이터를 비교 분석하여 운행 차량 식별</span>
+                            <span><b>차량번호 교차 추정 알고리즘:</b> 도착 정보와 노선 위치 GPS API 데이터를 교차 검증하여 예상 운행 차량 번호 매칭</span>
                         </li>
                         <li class="flex items-start gap-2">
                             <i class="fa-solid fa-check text-indigo-400 mt-0.5"></i>
-                            <span><b>개인화 시간표:</b> `timetable.json` 연동을 통한 요일별 수업 시간/강의실 데이터 안내</span>
+                            <span><b>예외 처리 및 재시도:</b> TAGO 게이트웨이 일시적 오류 발생 시 자동 Retry 로직 및 `00` 정상 코드 검증 구현</span>
                         </li>
                     </ul>
                 </div>
 
-                <!-- 디버그/개발자 툴 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                    <div class="flex justify-between items-start">
-                        <div class="space-y-1">
-                            <span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">개발 및 유지보수</span>
-                            <h4 class="text-lg font-bold text-white">진단 및 디버그 명령어</h4>
+                <!-- /지하철 명령어 -->
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition space-y-4">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-train-subway"></i>
+                            </div>
+                            <h4 class="text-xl font-bold text-white">/지하철 명령어</h4>
                         </div>
-                        <i class="fa-solid fa-code text-slate-600 text-xl"></i>
+                        <span class="text-xs px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 font-mono">SubwayInfoService</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
-                            <p class="font-mono text-amber-400 font-bold">/버스디버그</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">nodeord, updowncd 순번 및 원본 파싱 확인</p>
-                        </div>
-                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
-                            <p class="font-mono text-amber-400 font-bold">/정류소검색</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">키워드 기반 정류소 ID(nodeid) 실시간 조회</p>
-                        </div>
-                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
-                            <p class="font-mono text-amber-400 font-bold">/버스위치</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">운행 중 511번 차량의 GPS 및 통과역 추적</p>
-                        </div>
-                        <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
-                            <p class="font-mono text-amber-400 font-bold">/도시코드확인</p>
-                            <p class="text-[11px] text-slate-400 mt-0.5">인천 도시코드(23) 및 통신 상태 세션 검증</p>
-                        </div>
+                    <ul class="space-y-2.5 text-xs text-slate-300">
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
+                            <span><b>인천2호선 맞춤 연동:</b> 마전역(운연 방면) 및 주안역(검단오류 방면) 등 주요 이용 노선 최적화</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
+                            <span><b>시간표 기반 남은 시간 계산:</b> 정시성이 높은 시간표 데이터를 파싱하여 현재 시간 기준 "N분 후 출발" 자동 계산</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-check text-emerald-400 mt-0.5"></i>
+                            <span><b>인증키 통일:</b> 버스 API와 동일한 TAGO 통합 `serviceKey`를 사용해 별도 발급 없는 효율적 구조 마련</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: 서버 환경 변화 및 오라클 클라우드 구축 -->
+        <section class="space-y-6">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-2xl font-bold text-white">2. 서버 인프라: Oracle Cloud 24시간 무중단 환경 구축</h3>
+            </div>
+
+            <!-- Before vs After 비교 카드 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 지난 시연 (Before) -->
+                <div class="p-6 rounded-2xl bg-rose-950/20 border border-rose-500/20 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-rose-400">지난 시연 방식 (Before)</span>
+                        <i class="fa-solid fa-laptop text-rose-400 text-lg"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-slate-200">개인 노트북 로컬 실행</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        노트북에서 파이썬 코드를 직접 실행하여 시연 진행. 노트북 덮개를 닫거나 절전 모드 진입 시 봇이 즉시 종료되며, 네트워크 환경 변화에 매우 취약한 단점 존재.
+                    </p>
+                </div>
+
+                <!-- 현재 상태 (After) -->
+                <div class="p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">현재 구축 방식 (After)</span>
+                        <i class="fa-solid fa-cloud text-emerald-400 text-lg"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-slate-200">Oracle Cloud VPS 상시 가동</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        오라클 클라우드 우분투(Ubuntu 22.04 LTS) 인스턴스 구축 완료. 개인 PC를 꺼도 24시간 365일 디스코드 채널에서 끊김 없는 서비스 제공 가능.
+                    </p>
+                </div>
+            </div>
+
+            <!-- 세부 기술 스택 카드 -->
+            <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                <h4 class="font-bold text-white text-base flex items-center gap-2">
+                    <i class="fa-solid fa-gear text-indigo-400"></i> 클라우드 인프라 세부 구성 요소
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
+                        <p class="font-bold text-indigo-400">systemd 데몬 프로세스</p>
+                        <p class="text-slate-400">`chatbot.service` 등록을 통해 서버 재부팅 및 봇 비정상 종료 시 5초 내 자동 재시작 구현</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
+                        <p class="font-bold text-indigo-400">KST (Asia/Seoul) 동기화</p>
+                        <p class="text-slate-400">서버 타임존을 한국 시간으로 고정하여 버스/지하철 시간표 파싱 및 시간 계산 오류 원천 차단</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-1">
+                        <p class="font-bold text-indigo-400">VNIC 및 보안망 구성</p>
+                        <p class="text-slate-400">오라클 VNIC 설정을 통한 고정 Public IP 바인딩 및 독립된 보안 그룹 구성을 통한 안전한 통신</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Slide 3: Next Step (인천 2호선 지하철 확장) -->
-        <section class="space-y-4">
-            <div class="flex items-center gap-2">
-                <span class="w-2.5 h-6 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-xl font-bold text-white">3. 차세대 확장: 인천2호선 /지하철 연동</h3>
+        <!-- Section 3: 앞으로의 목표 (Future Roadmap) -->
+        <section class="space-y-6">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <span class="w-3 h-8 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-2xl font-bold text-white">3. 향후 발전 목표 (Future Roadmap)</h3>
             </div>
-            <div class="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950/40 border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div class="space-y-2 max-w-xl">
-                    <div class="flex items-center gap-2">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">TAGO Subway API</span>
-                        <h4 class="text-lg font-bold text-white">국토교통부 지하철도착정보 API 활용</h4>
-                    </div>
-                    <p class="text-xs text-slate-300 leading-relaxed">
-                        별도의 외부 API 키 발급 없이 기존 TAGO 서비스키를 활용하여 인천2호선(주안역, 검암역 등)의 실시간 도착 예정 시간(초/분)을 동일한 파이프라인으로 구현 예정입니다.
+            <p class="text-slate-400 text-sm">
+                단순 조회 중심의 서비스에서 사용자 맞춤형 데이터를 저장하고 관리할 수 있는 능동형 학생 지원 플랫폼으로 확장할 예정입니다.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 목표 1: DB 연동 & 시간표 CRUD -->
+                <div class="p-6 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-3 relative overflow-hidden">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">01</div>
+                    <h4 class="font-bold text-white">시간표 데이터베이스 연동 및 CRUD</h4>
+                    <p class="text-xs text-slate-400 leading-normal">
+                        기존 고정 `timetable.json` 방식에서 데이터베이스(SQLite/PostgreSQL) 연동 방식으로 전환하여, 사용자가 직접 슬래시 명령어로 수업을 추가/수정/삭제(CRUD)할 수 있도록 구현
                     </p>
                 </div>
-                <div class="flex items-center gap-3 w-full md:w-auto">
-                    <div class="flex-1 md:flex-none text-center px-4 py-3 rounded-xl bg-slate-950 border border-slate-800">
-                        <p class="text-[10px] text-slate-400">1단계 역코드 조회</p>
-                        <p class="text-xs font-mono font-bold text-indigo-400">getKwrdFnd...</p>
-                    </div>
-                    <i class="fa-solid fa-arrow-right text-slate-600"></i>
-                    <div class="flex-1 md:flex-none text-center px-4 py-3 rounded-xl bg-slate-950 border border-slate-800">
-                        <p class="text-[10px] text-slate-400">2단계 실시간 도착</p>
-                        <p class="text-xs font-mono font-bold text-indigo-400">getSubwaySttn...</p>
-                    </div>
+
+                <!-- 목표 2: 버스/지하철 즐겨찾기 CRUD -->
+                <div class="p-6 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-3 relative overflow-hidden">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">02</div>
+                    <h4 class="font-bold text-white">교통 정보 커스텀 즐겨찾기</h4>
+                    <p class="text-xs text-slate-400 leading-normal">
+                        511번 버스 외에 학생 개인별 자주 이용하는 버스 정류장 및 지하철역을 개인 DB에 등록하고 관리할 수 있는 사용자 맞춤형 조회 기능 제공
+                    </p>
+                </div>
+
+                <!-- 목표 3: 학점계산기 기능 -->
+                <div class="p-6 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 space-y-3 relative overflow-hidden">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-sm">03</div>
+                    <h4 class="font-bold text-white">학생 맞춤형 학점 계산기 추가</h4>
+                    <p class="text-xs text-slate-400 leading-normal">
+                        수강 과목별 학점(Credit)과 성적(Grade)을 입력 받아 이수 학점, 전공 평점, 전체 GPA를 자동 산출하고 목표 학점을 관리할 수 있는 시뮬레이션 기능 개발
+                    </p>
                 </div>
             </div>
         </section>
@@ -178,8 +214,11 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
-        <p>© 2026 InhaBot Development Team. Powered by 국토교통부 TAGO Open API.</p>
+    <footer class="border-t border-slate-800 py-8 text-center text-xs text-slate-500">
+        <div class="max-w-5xl mx-auto px-6 space-y-2">
+            <p>© 2026 InhaBot Development Team. All rights reserved.</p>
+            <p class="text-slate-600">Powered by Oracle Cloud Infrastructure & 국토교통부 TAGO Open API</p>
+        </div>
     </footer>
 
 </body>
