@@ -12,7 +12,9 @@ from dotenv import load_dotenv
 # .env 파일에서 토큰 가져오기
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-BUS_API_KEY = os.getenv("PUBLIC_BUS_API_KEY")
+# 버스/지하철 API 모두 국토교통부(TAGO) 서비스라 이름을 통일함.
+# 예전 .env에 PUBLIC_BUS_API_KEY로 남아있어도 당장 동작하도록 폴백 유지.
+TAGO_API_KEY = os.getenv("PUBLIC_TAGO_API_KEY") or os.getenv("PUBLIC_BUS_API_KEY")
 
 WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 
@@ -134,21 +136,31 @@ _subway_station_cache = {}
 
 
 def get_subway_station_matches(station_name: str):
-    """키워드기반 지하철역 목록 조회. 인천 2호선인 항목만 우선 필터링해서 반환."""
+    """키워드기반 지하철역 목록 조회. 인천 2호선인 항목만 우선 필터링해서 반환.
+    ⚠️ TAGO 역명 DB가 '역' 글자 없이 저장된 경우가 있어(예: '마전역' 대신 '마전'),
+    원래 이름으로 못 찾으면 '역'을 뗀 이름으로 한 번 더 시도한다."""
     if station_name in _subway_station_cache:
         return True, _subway_station_cache[station_name]
 
-    url = f"{TAGO_HOST}/SubwayInfo/GetKwrdFndSubwaySttnList"
-    params = {
-        "serviceKey": BUS_API_KEY,
-        "subwayStationName": station_name,
-        "numOfRows": "20",
-        "pageNo": "1",
-        "_type": "xml",
-    }
-    ok, items = _fetch_tago_xml(url, params)
+    def _search(keyword):
+        url = f"{TAGO_HOST}/SubwayInfo/GetKwrdFndSubwaySttnList"
+        params = {
+            "serviceKey": TAGO_API_KEY,
+            "subwayStationName": keyword,
+            "numOfRows": "20",
+            "pageNo": "1",
+            "_type": "xml",
+        }
+        return _fetch_tago_xml(url, params)
+
+    ok, items = _search(station_name)
     if not ok:
         return False, items
+
+    if not items and station_name.endswith("역"):
+        ok, items = _search(station_name[:-1])
+        if not ok:
+            return False, items
 
     line2_matches = [
         i for i in items
@@ -163,7 +175,7 @@ def get_subway_schedule(station_id: str, daily_type: str, up_down: str):
     """지하철역별 시간표 목록조회."""
     url = f"{TAGO_HOST}/SubwayInfo/GetSubwaySttnAcctoSchdulList"
     params = {
-        "serviceKey": BUS_API_KEY,
+        "serviceKey": TAGO_API_KEY,
         "subwayStationId": station_id,
         "dailyTypeCode": daily_type,
         "upDownTypeCode": up_down,
@@ -174,16 +186,41 @@ def get_subway_schedule(station_id: str, daily_type: str, up_down: str):
     return _fetch_tago_xml(url, params)
 
 
-def find_direction_schedule(station_id: str, daily_type: str, dest_keyword: str):
-    """U/D 두 방향을 각각 조회해서, 종점역명(endSubwayStationNm)에 목표 방면
-    키워드가 들어있는 쪽을 찾아 그 시간표를 반환한다."""
+def get_schedule_towards(station_id: str, daily_type: str, dest_keyword: str):
+    """해당 역의 U/D 시간표를 모두 가져온 뒤, 각 열차 자신의 종점역명
+    (endSubwayStationNm)에 목표 방면 키워드가 실제로 들어있는 열차만 걸러서 반환한다.
+    ⚠️ upDownTypeCode(U/D)로 미리 방향을 갈라서 통째로 보여줬더니 검단오류행/운연행이
+    섞여 나왔다 — U/D 구분만으로는 방향이 깔끔하게 안 갈리는 것으로 보여, 대신
+    열차 하나하나의 실제 종점을 직접 확인해서 필터링하는 방식으로 바꿨다."""
+    all_items = []
+    any_ok = False
+    last_error = "조회 실패"
     for up_down in ("U", "D"):
         ok, items = get_subway_schedule(station_id, daily_type, up_down)
-        if not ok:
+        if ok:
+            any_ok = True
+            all_items.extend(items)
+        else:
+            last_error = items
+
+    if not any_ok:
+        return False, last_error
+
+    matched = [it for it in all_items if dest_keyword in it.get("endSubwayStationNm", "")]
+    if not matched:
+        return False, f"'{dest_keyword}' 방면으로 가는 열차를 찾지 못했습니다."
+
+    # U/D를 둘 다 합쳤기 때문에 혹시 같은 열차가 중복으로 들어올 경우를 대비해 정리
+    seen = set()
+    deduped = []
+    for it in matched:
+        key = (it.get("depTime", ""), it.get("endSubwayStationNm", ""))
+        if key in seen:
             continue
-        if items and dest_keyword in items[0].get("endSubwayStationNm", ""):
-            return True, up_down, items
-    return False, None, f"'{dest_keyword}' 방면 시간표를 찾지 못했습니다."
+        seen.add(key)
+        deduped.append(it)
+
+    return True, deduped
 
 
 def get_today_daily_type_code():
@@ -265,7 +302,7 @@ def _fetch_tago_xml(url, params, max_retries=2, backoff_sec=1.0):
 def get_arrival_info(city_code: str, node_id: str, route_id: str):
     url = f"{TAGO_HOST}/ArvlInfoInqireService/getSttnAcctoSpcifyRouteBusArvlPrearngeInfoList"
     params = {
-        "serviceKey": BUS_API_KEY,
+        "serviceKey": TAGO_API_KEY,
         "cityCode": city_code,
         "nodeId": node_id,
         "routeId": route_id,
@@ -278,7 +315,7 @@ def get_arrival_info(city_code: str, node_id: str, route_id: str):
 def search_stations_by_name(city_code: str, keyword: str, num_of_rows: int = 20):
     url = f"{TAGO_HOST}/BusSttnInfoInqireService/getSttnNoList"
     params = {
-        "serviceKey": BUS_API_KEY,
+        "serviceKey": TAGO_API_KEY,
         "cityCode": city_code,
         "nodeNm": keyword,
         "numOfRows": str(num_of_rows),
@@ -292,7 +329,7 @@ def search_stations_by_name(city_code: str, keyword: str, num_of_rows: int = 20)
 def get_route_stops(city_code: str, route_id: str, num_of_rows: int = 100):
     url = f"{TAGO_HOST}/BusRouteInfoInqireService/getRouteAcctoThrghSttnList"
     params = {
-        "serviceKey": BUS_API_KEY,
+        "serviceKey": TAGO_API_KEY,
         "cityCode": city_code,
         "routeId": route_id,
         "numOfRows": str(num_of_rows),
@@ -377,7 +414,7 @@ def estimate_vehicle_plate(target_nodeord: int, arr_prev_cnt: str, location_item
 def get_route_bus_locations(city_code: str, route_id: str, num_of_rows: int = 100):
     url = f"{TAGO_HOST}/BusLcInfoInqireService/getRouteAcctoBusLcList"
     params = {
-        "serviceKey": BUS_API_KEY,
+        "serviceKey": TAGO_API_KEY,
         "cityCode": city_code,
         "routeId": route_id,
         "numOfRows": str(num_of_rows),
@@ -389,7 +426,7 @@ def get_route_bus_locations(city_code: str, route_id: str, num_of_rows: int = 10
 
 def get_city_code_list():
     url = f"{TAGO_HOST}/BusRouteInfoInqireService/getCtyCodeList"
-    params = {"serviceKey": BUS_API_KEY, "_type": "xml"}
+    params = {"serviceKey": TAGO_API_KEY, "_type": "xml"}
     return _fetch_tago_xml(url, params)
 
 
@@ -459,8 +496,8 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
 async def show_subway(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    if not BUS_API_KEY:
-        await interaction.followup.send("⚠️ PUBLIC_BUS_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+    if not TAGO_API_KEY:
+        await interaction.followup.send("⚠️ PUBLIC_TAGO_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
         return
 
     now = datetime.datetime.now()
@@ -478,12 +515,15 @@ async def show_subway(interaction: discord.Interaction):
         field_name = f"[{station_name} → {dest_keyword} 방면]"
 
         ok, matches = get_subway_station_matches(station_name)
-        if not ok or not matches:
-            embed.add_field(name=field_name, value="⚠️ 역 정보를 찾지 못했습니다.", inline=False)
+        if not ok:
+            embed.add_field(name=field_name, value=f"⚠️ 조회 실패: {matches}", inline=False)
+            continue
+        if not matches:
+            embed.add_field(name=field_name, value="⚠️ 역 정보를 찾지 못했습니다. /지하철역검색으로 확인해주세요.", inline=False)
             continue
 
         station_id = matches[0].get("subwayStationId", "")
-        ok, up_down, result = find_direction_schedule(station_id, daily_type, dest_keyword)
+        ok, result = get_schedule_towards(station_id, daily_type, dest_keyword)
         if not ok:
             embed.add_field(name=field_name, value=f"⚠️ {result}", inline=False)
             continue
@@ -536,8 +576,8 @@ async def subway_station_search(interaction: discord.Interaction, keyword: str):
 async def bus(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    if not BUS_API_KEY:
-        await interaction.followup.send("⚠️ PUBLIC_BUS_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+    if not TAGO_API_KEY:
+        await interaction.followup.send("⚠️ PUBLIC_TAGO_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
         return
 
     ok, stops = get_cached_route_stops(DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID)
