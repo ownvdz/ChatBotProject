@@ -116,21 +116,23 @@ def load_timetable():
 #        일치하는 쪽을 골라 쓴다.
 # =============================================================================
 
-INCHEON_LINE2_STATIONS = [
-    ("마전역", "운연"),   # 마전역 → 주안역 (운연 방면)
-    ("주안역", "검단오류"),  # 주안역 → 마전역 (검단오류 방면)
-]
-
-# 역 이름/노선ID 검색 결과 캐시 (역 목록은 자주 안 바뀌므로)
+# 역 이름/노선ID 검색 결과 캐시 (역 목록은 자주 안 바뀌므로), (station_name, line_keyword) 기준
 _subway_station_cache = {}
 
 
-def get_subway_station_matches(station_name: str):
-    """키워드기반 지하철역 목록 조회. 인천 2호선인 항목만 우선 필터링해서 반환.
-    ⚠️ TAGO 역명 DB가 '역' 글자 없이 저장된 경우가 있어(예: '마전역' 대신 '마전'),
-    원래 이름으로 못 찾으면 '역'을 뗀 이름으로 한 번 더 시도한다."""
-    if station_name in _subway_station_cache:
-        return True, _subway_station_cache[station_name]
+def _normalize(text: str) -> str:
+    return text.replace(" ", "")
+
+
+def get_subway_station_matches(station_name: str, line_keyword: str = None):
+    """키워드기반 지하철역 목록 조회. line_keyword가 있으면 노선명이 일치하는 항목만
+    우선 필터링해서 반환 (예: line_keyword='인천2호선' → subwayRouteName에 '인천'과
+    '2호선'이 다 들어있는 항목).
+    ⚠️ TAGO 역명 DB가 '역' 글자가 있을 수도, 없을 수도 있어서('마전' vs '마전역')
+    입력값 그대로 → '역' 붙인 버전 → '역' 뗀 버전 순으로 결과가 나올 때까지 시도한다."""
+    cache_key = (station_name, line_keyword)
+    if cache_key in _subway_station_cache:
+        return True, _subway_station_cache[cache_key]
 
     def _search(keyword):
         url = f"{TAGO_HOST}/SubwayInfo/GetKwrdFndSubwaySttnList"
@@ -143,21 +145,30 @@ def get_subway_station_matches(station_name: str):
         }
         return _fetch_tago_xml(url, params)
 
-    ok, items = _search(station_name)
-    if not ok:
-        return False, items
+    candidates = [station_name]
+    if station_name.endswith("역"):
+        candidates.append(station_name[:-1])
+    else:
+        candidates.append(station_name + "역")
 
-    if not items and station_name.endswith("역"):
-        ok, items = _search(station_name[:-1])
+    items = []
+    for keyword in candidates:
+        ok, items = _search(keyword)
         if not ok:
             return False, items
+        if items:
+            break
 
-    line2_matches = [
-        i for i in items
-        if "인천" in i.get("subwayRouteName", "") and "2호선" in i.get("subwayRouteName", "")
-    ]
-    result = line2_matches or items  # 인천2호선 필터링 결과가 없으면 전체 결과라도 반환
-    _subway_station_cache[station_name] = result
+    result = items
+    if line_keyword:
+        norm_keyword = _normalize(line_keyword)
+        line_matches = [
+            i for i in items
+            if norm_keyword in _normalize(i.get("subwayRouteName", ""))
+        ]
+        result = line_matches or items  # 노선 필터링 결과가 없으면 전체 결과라도 반환
+
+    _subway_station_cache[cache_key] = result
     return True, result
 
 
@@ -176,12 +187,10 @@ def get_subway_schedule(station_id: str, daily_type: str, up_down: str):
     return _fetch_tago_xml(url, params)
 
 
-def get_schedule_towards(station_id: str, daily_type: str, dest_keyword: str):
-    """해당 역의 U/D 시간표를 모두 가져온 뒤, 각 열차 자신의 종점역명
-    (endSubwayStationNm)에 목표 방면 키워드가 실제로 들어있는 열차만 걸러서 반환한다.
-    ⚠️ upDownTypeCode(U/D)로 미리 방향을 갈라서 통째로 보여줬더니 검단오류행/운연행이
-    섞여 나왔다 — U/D 구분만으로는 방향이 깔끔하게 안 갈리는 것으로 보여, 대신
-    열차 하나하나의 실제 종점을 직접 확인해서 필터링하는 방식으로 바꿨다."""
+def get_all_direction_schedules(station_id: str, daily_type: str):
+    """해당 역의 U/D 시간표를 모두 가져와 하나로 합친다 (방향 구분은 나중에 각 열차의
+    실제 종점역명으로 직접 판단한다 — upDownTypeCode만으로는 깔끔하게 안 갈리는 걸
+    마전역에서 확인했기 때문)."""
     all_items = []
     any_ok = False
     last_error = "조회 실패"
@@ -195,15 +204,13 @@ def get_schedule_towards(station_id: str, daily_type: str, dest_keyword: str):
 
     if not any_ok:
         return False, last_error
+    if not all_items:
+        return False, "시간표 데이터가 없습니다."
 
-    matched = [it for it in all_items if dest_keyword in it.get("endSubwayStationNm", "")]
-    if not matched:
-        return False, f"'{dest_keyword}' 방면으로 가는 열차를 찾지 못했습니다."
-
-    # U/D를 둘 다 합쳤기 때문에 혹시 같은 열차가 중복으로 들어올 경우를 대비해 정리
+    # 중복 제거 (같은 열차가 U/D 양쪽에 다 걸려서 들어올 가능성 대비)
     seen = set()
     deduped = []
-    for it in matched:
+    for it in all_items:
         key = (it.get("depTime", ""), it.get("endSubwayStationNm", ""))
         if key in seen:
             continue
@@ -211,6 +218,18 @@ def get_schedule_towards(station_id: str, daily_type: str, dest_keyword: str):
         deduped.append(it)
 
     return True, deduped
+
+
+def group_by_destination(items: list, top_n: int = 2):
+    """열차들을 각자의 실제 종점역명(endSubwayStationNm)으로 묶어서,
+    운행 편수가 많은 순서로 top_n개 방향만 반환한다.
+    (역 대부분에서 '진짜 두 종점 방향'이 편수가 가장 많고, 중간에 회차하는
+    단거리 열차는 편수가 적어서 자연스럽게 뒤로 밀린다.)"""
+    groups = {}
+    for it in items:
+        end_name = it.get("endSubwayStationNm", "") or "(종점 미상)"
+        groups.setdefault(end_name, []).append(it)
+    return sorted(groups.items(), key=lambda kv: len(kv[1]), reverse=True)[:top_n]
 
 
 def get_today_daily_type_code():
@@ -593,47 +612,71 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
 
 
 # -------------------------------------------------------------------------------------------
-@bot.tree.command(name="지하철", description="인천2호선 마전역/주안역의 다음 열차 출발 시간표를 조회합니다.")
-async def show_subway(interaction: discord.Interaction):
+@bot.tree.command(name="지하철", description="지정한 호선/역의 양방향 다음 열차 시간표를 조회합니다.")
+@app_commands.describe(line="호선 이름 (예: 인천2호선)", station="역 이름 (예: 검단사거리역)")
+async def show_subway(interaction: discord.Interaction, line: str, station: str):
     await interaction.response.defer()
 
     if not TAGO_API_KEY:
         await interaction.followup.send("⚠️ PUBLIC_TAGO_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
         return
 
-    now = datetime.datetime.now()
+    ok, matches = await asyncio.to_thread(get_subway_station_matches, station, line)
+    if not ok:
+        await interaction.followup.send(f"⚠️ 조회 실패: {matches}")
+        return
+    if not matches:
+        await interaction.followup.send(f"⚠️ '{line} {station}' 역 정보를 찾지 못했습니다. /지하철역검색으로 확인해주세요.")
+        return
+
+    station_id = matches[0].get("subwayStationId", "")
     daily_type = get_today_daily_type_code()
+
+    # ⚠️ 검색 결과 중 첫 번째가 항상 정답이 아닐 수 있다(같은 이름의 중복/폐기된 항목이
+    # 섞여 있으면 시간표가 비어있는 엉뚱한 station_id를 고를 수 있음). 그래서 후보를
+    # 순서대로 시도해서 실제로 시간표 데이터가 있는 첫 번째 역을 쓴다.
+    all_items = None
+    last_error = "시간표 데이터가 없습니다."
+    matched_station = matches[0]
+    for candidate in matches[:5]:
+        cand_id = candidate.get("subwayStationId", "")
+        if not cand_id:
+            continue
+        ok, result = await asyncio.to_thread(get_all_direction_schedules, cand_id, daily_type)
+        if ok and result:
+            all_items = result
+            matched_station = candidate
+            station_id = cand_id
+            break
+        if not ok:
+            last_error = result
+
+    if not all_items:
+        tried = len(matches[:5])
+        await interaction.followup.send(
+            f"⚠️ 시간표 조회 실패: {last_error} (후보 {tried}개 모두 확인함 — /지하철역검색으로 정확한 역을 확인해주세요)"
+        )
+        return
+
+    now = datetime.datetime.now()
     now_hhmmss = now.strftime("%H%M%S")
     now_seconds = now.hour * 3600 + now.minute * 60 + now.second
 
+    # 종점역명별로 묶어서(편수 많은 순) 상위 2개 방향만 표시 — 대부분 이게 진짜 양방향 종점이다.
+    direction_groups = group_by_destination(all_items, top_n=2)
+
     embed = discord.Embed(
-        title="🚇 인천2호선 다음 열차 시간표",
+        title=f"🚇 {matched_station.get('subwayStationName', station)} ({line}) 다음 열차",
         color=discord.Color.green(),
         timestamp=now,
     )
 
-    for station_name, dest_keyword in INCHEON_LINE2_STATIONS:
-        field_name = f"[{station_name} → {dest_keyword} 방면]"
-
-        ok, matches = await asyncio.to_thread(get_subway_station_matches, station_name)
-        if not ok:
-            embed.add_field(name=field_name, value=f"⚠️ 조회 실패: {matches}", inline=False)
-            continue
-        if not matches:
-            embed.add_field(name=field_name, value="⚠️ 역 정보를 찾지 못했습니다. /지하철역검색으로 확인해주세요.", inline=False)
-            continue
-
-        station_id = matches[0].get("subwayStationId", "")
-        ok, result = await asyncio.to_thread(get_schedule_towards, station_id, daily_type, dest_keyword)
-        if not ok:
-            embed.add_field(name=field_name, value=f"⚠️ {result}", inline=False)
-            continue
-
-        upcoming = [it for it in result if it.get("depTime", "").isdigit() and it["depTime"] >= now_hhmmss]
+    for end_name, items in direction_groups:
+        upcoming = [it for it in items if it.get("depTime", "").isdigit() and it["depTime"] >= now_hhmmss]
         upcoming.sort(key=lambda it: it["depTime"])
 
         if not upcoming:
-            embed.add_field(name=field_name, value="오늘 남은 열차가 없습니다.", inline=False)
+            embed.add_field(name=f"{end_name}행", value="오늘 남은 열차가 없습니다.", inline=False)
             continue
 
         lines = []
@@ -642,10 +685,9 @@ async def show_subway(interaction: discord.Interaction):
             h, m = dep[0:2], dep[2:4]
             dep_seconds = int(dep[0:2]) * 3600 + int(dep[2:4]) * 60 + int(dep[4:6])
             remain_min = max((dep_seconds - now_seconds) // 60, 0)
-            end_name = it.get("endSubwayStationNm", "")
-            lines.append(f"**{h}:{m} 출발** (약 {remain_min}분 후) · {end_name}행")
+            lines.append(f"**{h}:{m} 출발** (약 {remain_min}분 후)")
 
-        embed.add_field(name=field_name, value="\n".join(lines), inline=False)
+        embed.add_field(name=f"{end_name}행", value="\n".join(lines), inline=False)
 
     embed.set_footer(text="국토교통부(TAGO) 지하철정보 API 기반 · 실시간 도착정보가 아닌 고정 시간표(주1회 갱신)입니다")
     await interaction.followup.send(embed=embed)
@@ -653,11 +695,11 @@ async def show_subway(interaction: discord.Interaction):
 
 # --- 🔍 /지하철역검색 명령어: 이름으로 지하철역ID 검색 ---
 @bot.tree.command(name="지하철역검색", description="[개발용] 지하철역 이름으로 subwayStationId를 검색합니다.")
-@app_commands.describe(keyword="검색할 역 이름 (예: 마전역, 주안역)")
-async def subway_station_search(interaction: discord.Interaction, keyword: str):
+@app_commands.describe(keyword="검색할 역 이름 (예: 마전역, 주안역)", line="호선 이름으로 필터링 (예: 인천2호선, 생략 가능)")
+async def subway_station_search(interaction: discord.Interaction, keyword: str, line: str = None):
     await interaction.response.defer()
 
-    ok, result = await asyncio.to_thread(get_subway_station_matches, keyword)
+    ok, result = await asyncio.to_thread(get_subway_station_matches, keyword, line)
     if not ok:
         await interaction.followup.send(f"⚠️ 조회 실패: {result}")
         return
