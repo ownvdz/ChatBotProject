@@ -2,6 +2,7 @@ import os
 import json
 import time
 import asyncio
+import sqlite3
 import datetime
 import requests
 import xml.etree.ElementTree as ET
@@ -419,12 +420,123 @@ def get_city_code_list():
     return _fetch_tago_xml(url, params)
 
 
+# =============================================================================
+# 📋 게시판 CRUD (SQLite 기반)
+# -----------------------------------------------------------------------------
+# 로드맵의 "시간표 CRUD (DB 연동)"과 같은 맥락으로, 게시판도 고정 파일이 아니라
+# 실제 DB(SQLite)에 저장해서 생성/조회/수정/삭제가 가능하도록 만든다.
+# SQLite는 별도 서버 설치 없이 파일 하나(board.db)로 동작해서 이 프로젝트 규모에 적합.
+# ⚠️ 다른 API 호출들과 마찬가지로 DB 작업도 블로킹이라, 명령어 핸들러에서는
+#    asyncio.to_thread로 감싸서 호출한다.
+# =============================================================================
+
+BOARD_DB_PATH = "board.db"
+
+
+def init_board_db():
+    """봇 시작 시 한 번 호출해서 posts 테이블이 없으면 만든다."""
+    conn = sqlite3.connect(BOARD_DB_PATH)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                author_id TEXT NOT NULL,
+                author_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def db_create_post(title: str, content: str, author_id: str, author_name: str) -> int:
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = sqlite3.connect(BOARD_DB_PATH)
+    try:
+        cur = conn.execute(
+            "INSERT INTO posts (title, content, author_id, author_name, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (title, content, author_id, author_name, now, now),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def db_list_posts(limit: int = 10, offset: int = 0):
+    conn = sqlite3.connect(BOARD_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT id, title, author_name, created_at FROM posts ORDER BY id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+        total = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+        return [dict(r) for r in rows], total
+    finally:
+        conn.close()
+
+
+def db_get_post(post_id: int):
+    conn = sqlite3.connect(BOARD_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def db_update_post(post_id: int, title: str, content: str, author_id: str):
+    """본인 글만 수정 가능. (성공여부, 메시지) 반환."""
+    conn = sqlite3.connect(BOARD_DB_PATH)
+    try:
+        row = conn.execute("SELECT author_id FROM posts WHERE id = ?", (post_id,)).fetchone()
+        if row is None:
+            return False, f"{post_id}번 게시글을 찾을 수 없습니다."
+        if row[0] != str(author_id):
+            return False, "본인이 작성한 게시글만 수정할 수 있습니다."
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        conn.execute(
+            "UPDATE posts SET title = ?, content = ?, updated_at = ? WHERE id = ?",
+            (title, content, now, post_id),
+        )
+        conn.commit()
+        return True, "수정되었습니다."
+    finally:
+        conn.close()
+
+
+def db_delete_post(post_id: int, author_id: str):
+    """본인 글만 삭제 가능. (성공여부, 메시지) 반환."""
+    conn = sqlite3.connect(BOARD_DB_PATH)
+    try:
+        row = conn.execute("SELECT author_id FROM posts WHERE id = ?", (post_id,)).fetchone()
+        if row is None:
+            return False, f"{post_id}번 게시글을 찾을 수 없습니다."
+        if row[0] != str(author_id):
+            return False, "본인이 작성한 게시글만 삭제할 수 있습니다."
+
+        conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+        conn.commit()
+        return True, "삭제되었습니다."
+    finally:
+        conn.close()
+
+
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
+        init_board_db()
         await self.tree.sync()
         print("슬래시 명령어 동기화 성공")
 
@@ -740,6 +852,114 @@ async def city_code_check(interaction: discord.Interaction):
     await interaction.followup.send(
         header + "전체 도시코드 목록:\n" + ("\n".join(lines) if lines else "결과 없음")
     )
+
+
+# =============================================================================
+# 📋 게시판 명령어 (CRUD)
+# =============================================================================
+
+@bot.tree.command(name="게시글작성", description="게시판에 새 글을 작성합니다.")
+@app_commands.describe(title="제목", content="내용")
+async def create_post(interaction: discord.Interaction, title: str, content: str):
+    await interaction.response.defer()
+
+    post_id = await asyncio.to_thread(
+        db_create_post, title, content, str(interaction.user.id), interaction.user.display_name
+    )
+
+    embed = discord.Embed(
+        title="✅ 게시글이 등록되었습니다",
+        description=f"**[{post_id}] {title}**\n{content}",
+        color=discord.Color.blue(),
+        timestamp=datetime.datetime.now(),
+    )
+    embed.set_footer(text=f"작성자: {interaction.user.display_name}")
+    await interaction.followup.send(embed=embed)
+
+
+@bot.tree.command(name="게시글목록", description="게시판 글 목록을 조회합니다.")
+@app_commands.describe(page="페이지 번호 (1부터, 기본 1)")
+async def list_posts(interaction: discord.Interaction, page: int = 1):
+    await interaction.response.defer()
+
+    if page < 1:
+        await interaction.followup.send("⚠️ 페이지 번호는 1 이상이어야 합니다.")
+        return
+
+    page_size = 10
+    posts, total = await asyncio.to_thread(db_list_posts, page_size, (page - 1) * page_size)
+
+    if total == 0:
+        await interaction.followup.send("📋 아직 작성된 게시글이 없습니다.")
+        return
+    if not posts:
+        await interaction.followup.send(f"⚠️ {page}페이지에는 게시글이 없습니다. (전체 {total}건)")
+        return
+
+    total_pages = (total + page_size - 1) // page_size
+    lines = [f"`#{p['id']}` **{p['title']}** · {p['author_name']} · {p['created_at']}" for p in posts]
+
+    embed = discord.Embed(
+        title="📋 게시판 목록",
+        description="\n".join(lines),
+        color=discord.Color.blue(),
+    )
+    embed.set_footer(text=f"{page}/{total_pages} 페이지 · 전체 {total}건 · /게시글보기 번호로 상세 확인")
+    await interaction.followup.send(embed=embed)
+
+
+@bot.tree.command(name="게시글보기", description="게시글 번호로 상세 내용을 봅니다.")
+@app_commands.describe(post_id="게시글 번호")
+async def view_post(interaction: discord.Interaction, post_id: int):
+    await interaction.response.defer()
+
+    post = await asyncio.to_thread(db_get_post, post_id)
+    if not post:
+        await interaction.followup.send(f"⚠️ {post_id}번 게시글을 찾을 수 없습니다.")
+        return
+
+    embed = discord.Embed(
+        title=f"[{post['id']}] {post['title']}",
+        description=post["content"],
+        color=discord.Color.blue(),
+    )
+    footer = f"작성자: {post['author_name']} · 작성: {post['created_at']}"
+    if post["updated_at"] != post["created_at"]:
+        footer += f" · 수정: {post['updated_at']}"
+    embed.set_footer(text=footer)
+    await interaction.followup.send(embed=embed)
+
+
+@bot.tree.command(name="게시글수정", description="본인이 작성한 게시글을 수정합니다.")
+@app_commands.describe(post_id="수정할 게시글 번호", title="새 제목", content="새 내용")
+async def edit_post(interaction: discord.Interaction, post_id: int, title: str, content: str):
+    await interaction.response.defer()
+
+    ok, message = await asyncio.to_thread(db_update_post, post_id, title, content, interaction.user.id)
+    if not ok:
+        await interaction.followup.send(f"⚠️ {message}")
+        return
+
+    embed = discord.Embed(
+        title=f"✏️ [{post_id}] 수정 완료",
+        description=f"**{title}**\n{content}",
+        color=discord.Color.orange(),
+        timestamp=datetime.datetime.now(),
+    )
+    await interaction.followup.send(embed=embed)
+
+
+@bot.tree.command(name="게시글삭제", description="본인이 작성한 게시글을 삭제합니다.")
+@app_commands.describe(post_id="삭제할 게시글 번호")
+async def delete_post(interaction: discord.Interaction, post_id: int):
+    await interaction.response.defer()
+
+    ok, message = await asyncio.to_thread(db_delete_post, post_id, interaction.user.id)
+    if not ok:
+        await interaction.followup.send(f"⚠️ {message}")
+        return
+
+    await interaction.followup.send(f"🗑️ {post_id}번 게시글이 삭제되었습니다.")
 
 
 # -------------------------------------------------------------------------------------------
