@@ -190,34 +190,51 @@ def get_subway_schedule(station_id: str, daily_type: str, up_down: str):
 def get_all_direction_schedules(station_id: str, daily_type: str):
     """해당 역의 U/D 시간표를 모두 가져와 하나로 합친다 (방향 구분은 나중에 각 열차의
     실제 종점역명으로 직접 판단한다 — upDownTypeCode만으로는 깔끔하게 안 갈리는 걸
-    마전역에서 확인했기 때문)."""
-    all_items = []
-    any_ok = False
-    last_error = "조회 실패"
-    for up_down in ("U", "D"):
-        ok, items = get_subway_schedule(station_id, daily_type, up_down)
-        if ok:
-            any_ok = True
-            all_items.extend(items)
-        else:
-            last_error = items
+    마전역에서 확인했기 때문).
+    반환값: (성공여부, 결과 또는 에러메시지, 평일 데이터로 대체됐는지 여부)
+    ⚠️ 일부 역은 주말(토/일) 운행정보가 TAGO에 아직 등록 안 되어 totalCount=0으로
+    돌아오는 경우가 실제로 있다 (검단사거리역에서 확인됨). API 에러가 아니라 진짜
+    데이터 공백이라, 이럴 땐 평일 시간표를 참고용으로라도 보여준다."""
 
-    if not any_ok:
-        return False, last_error
-    if not all_items:
-        return False, "시간표 데이터가 없습니다."
+    def _fetch(dt):
+        all_items = []
+        any_ok = False
+        last_error = "조회 실패"
+        for up_down in ("U", "D"):
+            ok, items = get_subway_schedule(station_id, dt, up_down)
+            if ok:
+                any_ok = True
+                all_items.extend(items)
+            else:
+                last_error = items
+        if not any_ok:
+            return False, last_error
+        if not all_items:
+            return False, "운행정보가 없습니다."
+        return True, all_items
+
+    ok, result = _fetch(daily_type)
+    used_fallback = False
+
+    if not ok and daily_type != "01":
+        # 주말 데이터가 비어있는 경우, 평일 데이터라도 참고용으로 보여준다.
+        ok, result = _fetch("01")
+        used_fallback = ok
+
+    if not ok:
+        return False, result, False
 
     # 중복 제거 (같은 열차가 U/D 양쪽에 다 걸려서 들어올 가능성 대비)
     seen = set()
     deduped = []
-    for it in all_items:
+    for it in result:
         key = (it.get("depTime", ""), it.get("endSubwayStationNm", ""))
         if key in seen:
             continue
         seen.add(key)
         deduped.append(it)
 
-    return True, deduped
+    return True, deduped, used_fallback
 
 
 def group_by_destination(items: list, top_n: int = 2):
@@ -612,7 +629,7 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
 
 
 # -------------------------------------------------------------------------------------------
-@bot.tree.command(name="지하철", description="지정한 호선/역의 양방향 다음 열차 시간표를 조회합니다.")
+@bot.tree.command(name="지하철", description="지정한 호선/역의 양방향 다음 열차 운행정보를 조회합니다.")
 @app_commands.describe(line="호선 이름 (예: 인천2호선)", station="역 이름 (예: 검단사거리역)")
 async def show_subway(interaction: discord.Interaction, line: str, station: str):
     await interaction.response.defer()
@@ -633,18 +650,20 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
     daily_type = get_today_daily_type_code()
 
     # ⚠️ 검색 결과 중 첫 번째가 항상 정답이 아닐 수 있다(같은 이름의 중복/폐기된 항목이
-    # 섞여 있으면 시간표가 비어있는 엉뚱한 station_id를 고를 수 있음). 그래서 후보를
-    # 순서대로 시도해서 실제로 시간표 데이터가 있는 첫 번째 역을 쓴다.
+    # 섞여 있으면 운행정보가 비어있는 엉뚱한 station_id를 고를 수 있음). 그래서 후보를
+    # 순서대로 시도해서 실제로 운행정보가 있는 첫 번째 역을 쓴다.
     all_items = None
-    last_error = "시간표 데이터가 없습니다."
+    used_fallback = False
+    last_error = "운행정보가 없습니다."
     matched_station = matches[0]
     for candidate in matches[:5]:
         cand_id = candidate.get("subwayStationId", "")
         if not cand_id:
             continue
-        ok, result = await asyncio.to_thread(get_all_direction_schedules, cand_id, daily_type)
+        ok, result, fb = await asyncio.to_thread(get_all_direction_schedules, cand_id, daily_type)
         if ok and result:
             all_items = result
+            used_fallback = fb
             matched_station = candidate
             station_id = cand_id
             break
@@ -654,7 +673,7 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
     if not all_items:
         tried = len(matches[:5])
         await interaction.followup.send(
-            f"⚠️ 시간표 조회 실패: {last_error} (후보 {tried}개 모두 확인함 — /지하철역검색으로 정확한 역을 확인해주세요)"
+            f"⚠️ 운행정보 조회 실패: {last_error} (후보 {tried}개 모두 확인함 — /지하철역검색으로 정확한 역을 확인해주세요)"
         )
         return
 
@@ -671,7 +690,18 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
         timestamp=now,
     )
 
+    if used_fallback:
+        embed.description = "⚠️ 오늘(주말) 운행정보가 등록되어 있지 않아, **평일 기준 시간표**를 참고용으로 보여드려요. 실제 오늘 운행 여부와 다를 수 있습니다."
+
     for end_name, items in direction_groups:
+        if used_fallback:
+            # 평일 시간표를 참고용으로 보여줄 땐 '오늘 이후'라는 개념이 의미가 없어
+            # 남은 시간 계산 없이 첫 열차부터 몇 개만 그대로 보여준다.
+            sample = sorted(items, key=lambda it: it.get("depTime", ""))[:3]
+            lines = [f"**{it['depTime'][0:2]}:{it['depTime'][2:4]} 출발** (평일 기준)" for it in sample]
+            embed.add_field(name=f"{end_name}행", value="\n".join(lines) if lines else "정보 없음", inline=False)
+            continue
+
         upcoming = [it for it in items if it.get("depTime", "").isdigit() and it["depTime"] >= now_hhmmss]
         upcoming.sort(key=lambda it: it["depTime"])
 
@@ -689,7 +719,7 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
 
         embed.add_field(name=f"{end_name}행", value="\n".join(lines), inline=False)
 
-    embed.set_footer(text="국토교통부(TAGO) 지하철정보 API 기반 · 실시간 도착정보가 아닌 고정 시간표(주1회 갱신)입니다")
+    embed.set_footer(text="국토교통부(TAGO) 지하철정보 API 기반 · 실시간 도착정보가 아닌 고정 운행정보(주1회 갱신)입니다")
     await interaction.followup.send(embed=embed)
 
 
@@ -1002,6 +1032,64 @@ async def delete_post(interaction: discord.Interaction, post_id: int):
         return
 
     await interaction.followup.send(f"🗑️ {post_id}번 게시글이 삭제되었습니다.")
+
+
+# --- 🔧 /지하철디버그 명령어: 시간표 API의 날것 응답을 그대로 보여줌 ---
+@bot.tree.command(name="지하철디버그", description="[개발용] 지하철역 시간표 API의 원본 응답을 확인합니다.")
+@app_commands.describe(
+    station_id="지하철역ID (예: MTRICI2203, /지하철역검색으로 확인)",
+    up_down="상행(U)/하행(D)",
+    daily_type="요일구분 (생략 시 오늘 기준)",
+)
+@app_commands.choices(
+    up_down=[
+        app_commands.Choice(name="U (상행)", value="U"),
+        app_commands.Choice(name="D (하행)", value="D"),
+    ],
+    daily_type=[
+        app_commands.Choice(name="평일", value="01"),
+        app_commands.Choice(name="토요일", value="02"),
+        app_commands.Choice(name="일요일", value="03"),
+    ],
+)
+async def subway_debug(
+    interaction: discord.Interaction,
+    station_id: str,
+    up_down: app_commands.Choice[str],
+    daily_type: app_commands.Choice[str] = None,
+):
+    await interaction.response.defer()
+
+    daily_type_value = daily_type.value if daily_type else get_today_daily_type_code()
+    url = f"{TAGO_HOST}/SubwayInfo/GetSubwaySttnAcctoSchdulList"
+    params = {
+        "serviceKey": TAGO_API_KEY,
+        "subwayStationId": station_id,
+        "dailyTypeCode": daily_type_value,
+        "upDownTypeCode": up_down.value,
+        "numOfRows": "10",
+        "pageNo": "1",
+        "_type": "xml",
+    }
+
+    def _fetch_raw():
+        try:
+            response = requests.get(url, params=params, headers=REQUEST_HEADERS, timeout=5)
+            return response.status_code, response.text
+        except requests.exceptions.RequestException as e:
+            return None, str(e)
+
+    status_code, raw_text = await asyncio.to_thread(_fetch_raw)
+
+    if status_code is None:
+        await interaction.followup.send(f"⚠️ 네트워크 오류: {raw_text}")
+        return
+
+    snippet = raw_text[:1200]
+    await interaction.followup.send(
+        f"요청: `dailyTypeCode={daily_type_value}, upDownTypeCode={up_down.value}, subwayStationId={station_id}`\n"
+        f"HTTP {status_code}\n```xml\n{snippet}\n```"
+    )
 
 
 # -------------------------------------------------------------------------------------------
