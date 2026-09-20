@@ -2,7 +2,6 @@ import os
 import json
 import time
 import asyncio
-import sqlite3
 import datetime
 import requests
 import xml.etree.ElementTree as ET
@@ -17,6 +16,12 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 # 버스/지하철 API 모두 국토교통부(TAGO) 서비스라 이름을 통일함.
 # 예전 .env에 PUBLIC_BUS_API_KEY로 남아있어도 당장 동작하도록 폴백 유지.
 TAGO_API_KEY = os.getenv("PUBLIC_TAGO_API_KEY") or os.getenv("PUBLIC_BUS_API_KEY")
+ODSAY_API_KEY = os.getenv("ODSAY_API_KEY")
+# 개발 중인 디스코드 서버(길드) ID. 있으면 그 서버에만 슬래시 명령어를 즉시 동기화한다.
+# 전역(글로벌) 동기화는 디스코드 전체에 반영되기까지 최대 1시간이 걸려서,
+# "새로 추가한 명령어가 안 보인다"는 문제의 흔한 원인이 된다.
+_guild_id_raw = os.getenv("DISCORD_GUILD_ID", "").strip()
+GUILD_ID = int(_guild_id_raw) if _guild_id_raw.isdigit() else None
 
 WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 
@@ -337,20 +342,6 @@ def get_arrival_info(city_code: str, node_id: str, route_id: str):
     return _fetch_tago_xml(url, params)
 
 
-# --- 2) 버스정류소정보조회: 정류소명으로 검색 ---
-def search_stations_by_name(city_code: str, keyword: str, num_of_rows: int = 20):
-    url = f"{TAGO_HOST}/BusSttnInfoInqireService/getSttnNoList"
-    params = {
-        "serviceKey": TAGO_API_KEY,
-        "cityCode": city_code,
-        "nodeNm": keyword,
-        "numOfRows": str(num_of_rows),
-        "pageNo": "1",
-        "_type": "xml",
-    }
-    return _fetch_tago_xml(url, params)
-
-
 # --- 3) 버스노선정보조회: 노선별 경유 정류소 목록 (양방향, 순서 포함) ---
 def get_route_stops(city_code: str, route_id: str, num_of_rows: int = 100):
     url = f"{TAGO_HOST}/BusRouteInfoInqireService/getRouteAcctoThrghSttnList"
@@ -450,120 +441,212 @@ def get_route_bus_locations(city_code: str, route_id: str, num_of_rows: int = 10
     return _fetch_tago_xml(url, params)
 
 
-def get_city_code_list():
-    url = f"{TAGO_HOST}/BusRouteInfoInqireService/getCtyCodeList"
-    params = {"serviceKey": TAGO_API_KEY, "_type": "xml"}
-    return _fetch_tago_xml(url, params)
-
 
 # =============================================================================
-# 📋 게시판 CRUD (SQLite 기반)
+# 🗺️ ODsay 대중교통 길찾기 API 연동
 # -----------------------------------------------------------------------------
-# 로드맵의 "시간표 CRUD (DB 연동)"과 같은 맥락으로, 게시판도 고정 파일이 아니라
-# 실제 DB(SQLite)에 저장해서 생성/조회/수정/삭제가 가능하도록 만든다.
-# SQLite는 별도 서버 설치 없이 파일 하나(board.db)로 동작해서 이 프로젝트 규모에 적합.
-# ⚠️ 다른 API 호출들과 마찬가지로 DB 작업도 블로킹이라, 명령어 핸들러에서는
-#    asyncio.to_thread로 감싸서 호출한다.
+# ODsay는 "어느 버스/지하철을 타고 어디서 환승하는지" 경로 탐색은 되지만,
+# 실시간 "몇 분 후 도착" 정보는 자체 제공하지 않는 지역이 많다. ODsay 공식
+# 가이드(실시간 도착정보 연동 가이드)에서도 인천을 포함한 "그 외 지역"은
+# 국토교통부 TAGO 공공API를 조합해서 쓰라고 명시하고 있다.
+#
+# 그래서 구조는:
+#   1) ODsay로 경로 탐색 (어느 구간에서 어느 버스/지하철을 타는지)
+#   2) ODsay의 localStationID로 그 정류장/역의 TAGO nodeId를 얻음
+#      (인천은 localStationID가 TAGO와 같은 "ICB..." 형식이라 그대로 쓸 수 있음)
+#   3) 그 nodeId + routeId로 위에서 이미 만든 TAGO 실시간 함수를 그대로 재사용
+#
+# 출력 포맷은 XML 대신 json으로 받는다 (파싱이 더 간단해서 버스/지하철 TAGO
+# 코드와는 다르게 처리한다).
 # =============================================================================
 
-BOARD_DB_PATH = "board.db"
+ODSAY_HOST = "https://api.odsay.com/v1/api"
 
 
-def init_board_db():
-    """봇 시작 시 한 번 호출해서 posts 테이블이 없으면 만든다."""
-    conn = sqlite3.connect(BOARD_DB_PATH)
-    try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS posts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                author_id TEXT NOT NULL,
-                author_name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+def _parse_odsay_error(err):
+    """ODsay의 error 필드는 dict({"code","msg"}) 또는 list([{"code","message"}]) 두 형태로 온다.
+    (인증 실패 등 게이트웨이 계열 에러는 list + 'message' 키로 오는 경우가 있음)
+    (코드, 메시지)로 통일해서 반환."""
+    if isinstance(err, list):
+        err = err[0] if err else {}
+    if not isinstance(err, dict):
+        return "", str(err)
+    code = str(err.get("code", ""))
+    msg = err.get("msg") or err.get("message") or "알 수 없는 에러"
+    return code, msg
+
+
+def _fetch_odsay_json(endpoint: str, params: dict, max_retries: int = 2, backoff_sec: float = 1.0):
+    """ODsay API 공통 호출. (성공여부, 결과딕셔너리 또는 에러메시지) 반환."""
+    url = f"{ODSAY_HOST}/{endpoint}"
+    params = {**params, "apiKey": ODSAY_API_KEY, "output": "json"}
+
+    last_error = "알 수 없는 오류"
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(url, params=params, headers=REQUEST_HEADERS, timeout=5)
+        except requests.exceptions.RequestException as e:
+            last_error = f"네트워크 오류: {e}"
+            time.sleep(backoff_sec)
+            continue
+
+        if response.status_code != 200:
+            last_error = f"HTTP {response.status_code} 오류"
+            time.sleep(backoff_sec)
+            continue
+
+        try:
+            data = response.json()
+        except ValueError:
+            last_error = f"응답을 JSON으로 해석할 수 없습니다: {response.text[:200]}"
+            time.sleep(backoff_sec)
+            continue
+
+        if "error" in data:
+            code, msg = _parse_odsay_error(data["error"])
+            print(f"[ODsay ERROR] endpoint={endpoint} code={code} msg={msg} raw={data['error']}")
+            # 인증 실패는 재시도해도 소용없으므로 즉시 반환 + 원인 힌트 제공
+            if "ApiKey" in msg:
+                return False, (
+                    f"{msg} (코드 {code}) — ODsay 키 인증 실패입니다. "
+                    "ODsay 콘솔에서 키에 등록한 플랫폼(Server IP / Web URI)이 "
+                    "현재 봇이 실행되는 환경과 일치하는지 확인해주세요."
+                )
+            # 500(서버오류)만 재시도, 나머지(-8,-9,3,4,5,6,-98,-99 등)는 즉시 반환
+            if code == "500" and attempt < max_retries:
+                last_error = f"{msg} (코드 {code})"
+                time.sleep(backoff_sec)
+                continue
+            return False, f"{msg} (코드 {code})"
+
+        return True, data.get("result", {})
+
+    return False, last_error
+
+
+def odsay_search_station(name: str, station_class: str = None):
+    """대중교통 정류장 검색. station_class: '1'=버스, '2'=지하철 (생략시 둘다)."""
+    params = {"stationName": name}
+    if station_class:
+        params["stationClass"] = station_class
+    ok, result = _fetch_odsay_json("searchStation", params)
+    if not ok:
+        return False, result
+    return True, result.get("station", [])
+
+
+def odsay_search_path(sx: float, sy: float, ex: float, ey: float):
+    """대중교통 길찾기. 좌표(경도,위도) 기준."""
+    params = {"SX": sx, "SY": sy, "EX": ex, "EY": ey}
+    ok, result = _fetch_odsay_json("searchPubTransPathT", params)
+    if not ok:
+        return False, result
+    paths = result.get("path", [])
+    if not paths:
+        return False, "검색된 경로가 없습니다."
+    return True, paths
+
+
+def odsay_search_bus_lane(bus_no: str, cid: str = None):
+    """버스노선 조회 (busNo → localBusID 등 확인용)."""
+    params = {"busNo": bus_no}
+    if cid:
+        params["CID"] = cid
+    ok, result = _fetch_odsay_json("searchBusLane", params)
+    if not ok:
+        return False, result
+    return True, result.get("lane", [])
+
+
+def resolve_station_coords(name: str):
+    """이름으로 정류장/역 좌표를 찾는다. (성공여부, {x,y,stationClass,...} 또는 에러메시지)"""
+    ok, stations = odsay_search_station(name)
+    if not ok:
+        return False, stations
+    if not stations:
+        return False, f"'{name}' 정류장/역을 찾을 수 없습니다."
+    return True, stations[0]
+
+
+TRAFFIC_TYPE_NAMES = {1: "지하철", 2: "버스", 3: "도보"}
+
+
+def summarize_subpath(sub_path: dict) -> str:
+    """길찾기 결과 한 구간을 사람이 읽을 수 있는 한 줄로 요약."""
+    traffic_type = sub_path.get("trafficType")
+    type_name = TRAFFIC_TYPE_NAMES.get(traffic_type, "이동")
+
+    if traffic_type == 3:  # 도보
+        distance = sub_path.get("distance", 0)
+        return f"🚶 도보 {distance}m (약 {sub_path.get('sectionTime', '?')}분)"
+
+    lane = sub_path.get("lane", {})
+    if isinstance(lane, list):
+        lane = lane[0] if lane else {}
+    lane_name = lane.get("busNo") or lane.get("name") or "?"
+    start_name = sub_path.get("startName", "?")
+    end_name = sub_path.get("endName", "?")
+    station_count = sub_path.get("stationCount", "?")
+    section_time = sub_path.get("sectionTime", "?")
+
+    icon = "🚇" if traffic_type == 1 else "🚌"
+    return (
+        f"{icon} [{lane_name}] {start_name} → {end_name} "
+        f"({station_count}개 정류장, 약 {section_time}분)"
+    )
+
+
+
+def _strip_station_suffix(name: str) -> str:
+    """'마전역' → '마전' 식으로 공백과 '역' 접미사를 제거해 비교용 문자열로 만든다."""
+    name = _normalize(name or "")
+    return name[:-1] if name.endswith("역") else name
+
+
+def get_subway_realtime_note(board_name: str, line_name: str, way: str, daily_type: str):
+    """/길찾기의 지하철 구간용: 탑승역/노선/방면으로 TAGO 시간표에서 '다음 열차' 문구를 만든다.
+    방향은 하차역(endName)이 아니라 ODsay의 way(방면)와 열차의 실제 종점역명을 비교해서
+    판단한다. 찾지 못하면 None을 반환 (그 구간은 경로 요약만 표시됨)."""
+    if not board_name or not way:
+        return None
+    ok, matches = get_subway_station_matches(board_name, line_name or None)
+    if not ok or not matches:
+        return None
+
+    way_key = _strip_station_suffix(way)
+    now = datetime.datetime.now()
+    now_hhmmss = now.strftime("%H%M%S")
+    now_seconds = now.hour * 3600 + now.minute * 60 + now.second
+
+    # /지하철과 동일하게, 같은 이름의 후보가 여러 개일 수 있어 운행정보가 있는 첫 후보를 쓴다.
+    for cand in matches[:5]:
+        cand_id = cand.get("subwayStationId", "")
+        if not cand_id:
+            continue
+        ok_sch, sched, used_fallback = get_all_direction_schedules(cand_id, daily_type)
+        if not (ok_sch and sched):
+            continue
+
+        for g_name, g_items in group_by_destination(sched, top_n=2):
+            g_key = _strip_station_suffix(g_name)
+            if not g_key or not (way_key in g_key or g_key in way_key):
+                continue
+
+            upcoming = sorted(
+                (it for it in g_items if it.get("depTime", "").isdigit() and it["depTime"] >= now_hhmmss),
+                key=lambda it: it["depTime"],
             )
-        """)
-        conn.commit()
-    finally:
-        conn.close()
+            if not upcoming:
+                return f"⏱️ 오늘 남은 열차가 없습니다 ({g_name}행)"
 
-
-def db_create_post(title: str, content: str, author_id: str, author_name: str) -> int:
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    conn = sqlite3.connect(BOARD_DB_PATH)
-    try:
-        cur = conn.execute(
-            "INSERT INTO posts (title, content, author_id, author_name, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (title, content, author_id, author_name, now, now),
-        )
-        conn.commit()
-        return cur.lastrowid
-    finally:
-        conn.close()
-
-
-def db_list_posts(limit: int = 10, offset: int = 0):
-    conn = sqlite3.connect(BOARD_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        rows = conn.execute(
-            "SELECT id, title, author_name, created_at FROM posts ORDER BY id DESC LIMIT ? OFFSET ?",
-            (limit, offset),
-        ).fetchall()
-        total = conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
-        return [dict(r) for r in rows], total
-    finally:
-        conn.close()
-
-
-def db_get_post(post_id: int):
-    conn = sqlite3.connect(BOARD_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        row = conn.execute("SELECT * FROM posts WHERE id = ?", (post_id,)).fetchone()
-        return dict(row) if row else None
-    finally:
-        conn.close()
-
-
-def db_update_post(post_id: int, title: str, content: str, author_id: str):
-    """본인 글만 수정 가능. (성공여부, 메시지) 반환."""
-    conn = sqlite3.connect(BOARD_DB_PATH)
-    try:
-        row = conn.execute("SELECT author_id FROM posts WHERE id = ?", (post_id,)).fetchone()
-        if row is None:
-            return False, f"{post_id}번 게시글을 찾을 수 없습니다."
-        if row[0] != str(author_id):
-            return False, "본인이 작성한 게시글만 수정할 수 있습니다."
-
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        conn.execute(
-            "UPDATE posts SET title = ?, content = ?, updated_at = ? WHERE id = ?",
-            (title, content, now, post_id),
-        )
-        conn.commit()
-        return True, "수정되었습니다."
-    finally:
-        conn.close()
-
-
-def db_delete_post(post_id: int, author_id: str):
-    """본인 글만 삭제 가능. (성공여부, 메시지) 반환."""
-    conn = sqlite3.connect(BOARD_DB_PATH)
-    try:
-        row = conn.execute("SELECT author_id FROM posts WHERE id = ?", (post_id,)).fetchone()
-        if row is None:
-            return False, f"{post_id}번 게시글을 찾을 수 없습니다."
-        if row[0] != str(author_id):
-            return False, "본인이 작성한 게시글만 삭제할 수 있습니다."
-
-        conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
-        conn.commit()
-        return True, "삭제되었습니다."
-    finally:
-        conn.close()
+            dep = upcoming[0]["depTime"]
+            dep_seconds = int(dep[0:2]) * 3600 + int(dep[2:4]) * 60 + int(dep[4:6])
+            remain_min = max((dep_seconds - now_seconds) // 60, 0)
+            note = f"⏱️ 시간표상 다음 열차: {dep[0:2]}:{dep[2:4]} 출발 (약 {remain_min}분 후, {g_name}행)"
+            if used_fallback:
+                note += " · 오늘 운행정보가 없어 평일 시간표 기준"
+            return note
+    return None
 
 
 class MyBot(commands.Bot):
@@ -572,9 +655,14 @@ class MyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        init_board_db()
-        await self.tree.sync()
-        print("슬래시 명령어 동기화 성공")
+        if GUILD_ID:
+            guild = discord.Object(id=GUILD_ID)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            print(f"길드({GUILD_ID}) 전용 슬래시 명령어 동기화 성공 (즉시 반영)")
+        else:
+            await self.tree.sync()
+            print("전역 슬래시 명령어 동기화 성공 (디스코드 서버 전체 반영까지 최대 1시간 걸릴 수 있음)")
 
     async def on_ready(self):
         print(f'로그인 성공: {self.user.name} (ID: {self.user.id})')
@@ -643,7 +731,7 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
         await interaction.followup.send(f"⚠️ 조회 실패: {matches}")
         return
     if not matches:
-        await interaction.followup.send(f"⚠️ '{line} {station}' 역 정보를 찾지 못했습니다. /지하철역검색으로 확인해주세요.")
+        await interaction.followup.send(f"⚠️ '{line} {station}' 역 정보를 찾지 못했습니다.")
         return
 
     station_id = matches[0].get("subwayStationId", "")
@@ -673,7 +761,7 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
     if not all_items:
         tried = len(matches[:5])
         await interaction.followup.send(
-            f"⚠️ 운행정보 조회 실패: {last_error} (후보 {tried}개 모두 확인함 — /지하철역검색으로 정확한 역을 확인해주세요)"
+            f"⚠️ 운행정보 조회 실패: {last_error} (후보 {tried}개 모두 확인함)"
         )
         return
 
@@ -723,27 +811,6 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
     await interaction.followup.send(embed=embed)
 
 
-# --- 🔍 /지하철역검색 명령어: 이름으로 지하철역ID 검색 ---
-@bot.tree.command(name="지하철역검색", description="[개발용] 지하철역 이름으로 subwayStationId를 검색합니다.")
-@app_commands.describe(keyword="검색할 역 이름 (예: 마전역, 주안역)", line="호선 이름으로 필터링 (예: 인천2호선, 생략 가능)")
-async def subway_station_search(interaction: discord.Interaction, keyword: str, line: str = None):
-    await interaction.response.defer()
-
-    ok, result = await asyncio.to_thread(get_subway_station_matches, keyword, line)
-    if not ok:
-        await interaction.followup.send(f"⚠️ 조회 실패: {result}")
-        return
-    if not result:
-        await interaction.followup.send(f"'{keyword}'로 검색된 역이 없습니다.")
-        return
-
-    lines = [
-        f"{i.get('subwayStationName', '')} ({i.get('subwayRouteName', '')}) → id={i.get('subwayStationId', '')}"
-        for i in result[:20]
-    ]
-    await interaction.followup.send("🔍 검색 결과:\n" + "\n".join(lines))
-
-
 # --- 🚌 /버스 명령어: 511번 버스, 양방향 정류장 실시간 도착 "분" 정보 ---
 @bot.tree.command(name="버스", description="511번 버스의 주안역/정석항공과학고 실시간 도착 예정 정보를 조회합니다.")
 async def bus(interaction: discord.Interaction):
@@ -779,7 +846,7 @@ async def bus(interaction: discord.Interaction):
         if not node_ids:
             embed.add_field(
                 name=f"📍 {station_name}",
-                value="⚠️ 노선 정류소 목록에서 이 정류장을 찾지 못했습니다. /버스디버그로 확인해주세요.",
+                value="⚠️ 노선 정류소 목록에서 이 정류장을 찾지 못했습니다.",
                 inline=False,
             )
             continue
@@ -834,55 +901,6 @@ async def bus(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 
-# --- 🔧 /버스디버그 명령어: 511번 노선의 전체 경유 정류소(양방향) 원본 데이터 ---
-@bot.tree.command(name="버스디버그", description="[개발용] 511번 노선의 전체 경유 정류소 목록(양방향)을 표시합니다.")
-async def bus_debug(interaction: discord.Interaction):
-    await interaction.response.defer()
-
-    ok, stops = await asyncio.to_thread(get_cached_route_stops, DEFAULT_CITY_CODE, DEFAULT_ROUTE_ID, force_refresh=True)
-    if not ok:
-        await interaction.followup.send(f"⚠️ 조회 실패: {stops}")
-        return
-    if not stops:
-        await interaction.followup.send("경유 정류소 데이터가 없습니다.")
-        return
-
-    updown_map = {"0": "상행", "1": "하행"}
-    sorted_stops = sorted(stops, key=lambda s: (s.get("updowncd", ""), int(s.get("nodeord", "0") or 0)))
-    lines = []
-    for s in sorted_stops[:40]:
-        lines.append(
-            f"[{updown_map.get(s.get('updowncd', ''), s.get('updowncd', '?'))}] "
-            f"{s.get('nodeord', '?')}. {s.get('nodenm', '')} (nodeid={s.get('nodeid', '')})"
-        )
-
-    embed = discord.Embed(
-        title=f"🔧 노선 {DEFAULT_ROUTE_ID} 경유 정류소 (도시코드 {DEFAULT_CITY_CODE})",
-        description="```\n" + "\n".join(lines) + "\n```",
-        color=0x95a5a6,
-    )
-    embed.set_footer(text="사용자가 제공한 정류장 순서와 비교해서 맞는지 확인해주세요.")
-    await interaction.followup.send(embed=embed)
-
-
-# --- 🔍 /정류소검색 명령어 ---
-@bot.tree.command(name="정류소검색", description="[개발용] 정류소 이름으로 nodeId를 검색합니다 (TAGO 기준).")
-@app_commands.describe(keyword="검색할 정류소 이름 (예: 주안역, 정석항공과학고)")
-async def station_search(interaction: discord.Interaction, keyword: str):
-    await interaction.response.defer()
-
-    ok, result = await asyncio.to_thread(search_stations_by_name, DEFAULT_CITY_CODE, keyword)
-    if not ok:
-        await interaction.followup.send(f"⚠️ 조회 실패: {result}")
-        return
-    if not result:
-        await interaction.followup.send(f"'{keyword}'가 포함된 정류소를 찾지 못했습니다.")
-        return
-
-    lines = [f"{s.get('nodenm', '')} → nodeid={s.get('nodeid', '')}" for s in result[:20]]
-    await interaction.followup.send("🔍 검색 결과:\n" + "\n".join(lines))
-
-
 # --- 🚍 /버스위치 명령어: 실시간 GPS 위치 (보조 정보) ---
 @bot.tree.command(name="버스위치", description="511번 버스 전체의 실시간 GPS 위치를 조회합니다.")
 async def bus_location(interaction: discord.Interaction):
@@ -908,189 +926,103 @@ async def bus_location(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 
-# --- 🌆 /도시코드확인 명령어 ---
-@bot.tree.command(name="도시코드확인", description="[개발용] TAGO 도시코드 목록에서 인천 코드가 맞는지 확인합니다.")
-async def city_code_check(interaction: discord.Interaction):
+# --- 🗺️ /길찾기 명령어: ODsay 경로탐색 + TAGO 실시간 정보(버스 구간) ---
+@bot.tree.command(name="길찾기", description="정류장/역 이름으로 대중교통 경로를 찾습니다 (버스 구간은 실시간 도착정보 포함).")
+@app_commands.describe(start="출발 정류장/역 이름", goal="도착 정류장/역 이름")
+async def find_route(interaction: discord.Interaction, start: str, goal: str):
     await interaction.response.defer()
 
-    ok, result = await asyncio.to_thread(get_city_code_list)
-    if not ok:
-        await interaction.followup.send(f"⚠️ 조회 실패: {result}")
+    if not ODSAY_API_KEY:
+        await interaction.followup.send("⚠️ ODSAY_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
         return
 
-    lines = [f"{item.get('citycode', '')}: {item.get('cityname', '')}" for item in result]
-    matched = [l for l in lines if l.startswith(f"{DEFAULT_CITY_CODE}:")]
-    header = f"현재 설정된 도시코드({DEFAULT_CITY_CODE})는: {matched[0] if matched else '목록에서 찾지 못했습니다 — 값을 다시 확인해주세요'}\n\n"
-    await interaction.followup.send(
-        header + "전체 도시코드 목록:\n" + ("\n".join(lines) if lines else "결과 없음")
+    ok, start_station = await asyncio.to_thread(resolve_station_coords, start)
+    if not ok:
+        await interaction.followup.send(f"⚠️ 출발지 조회 실패: {start_station}")
+        return
+    ok, goal_station = await asyncio.to_thread(resolve_station_coords, goal)
+    if not ok:
+        await interaction.followup.send(f"⚠️ 도착지 조회 실패: {goal_station}")
+        return
+
+    ok, paths = await asyncio.to_thread(
+        odsay_search_path, start_station["x"], start_station["y"], goal_station["x"], goal_station["y"]
     )
+    if not ok:
+        await interaction.followup.send(f"⚠️ 경로 탐색 실패: {paths}")
+        return
 
-
-# =============================================================================
-# 📋 게시판 명령어 (CRUD)
-# =============================================================================
-
-@bot.tree.command(name="게시글작성", description="게시판에 새 글을 작성합니다.")
-@app_commands.describe(title="제목", content="내용")
-async def create_post(interaction: discord.Interaction, title: str, content: str):
-    await interaction.response.defer()
-
-    post_id = await asyncio.to_thread(
-        db_create_post, title, content, str(interaction.user.id), interaction.user.display_name
-    )
+    best_path = paths[0]
+    sub_paths = best_path.get("subPath", [])
+    info = best_path.get("info", {})
 
     embed = discord.Embed(
-        title="✅ 게시글이 등록되었습니다",
-        description=f"**[{post_id}] {title}**\n{content}",
-        color=discord.Color.blue(),
+        title=f"🗺️ {start} → {goal}",
+        description=(
+            f"총 {info.get('totalTime', '?')}분 · {info.get('totalDistance', '?')}m"
+            f" · 요금 {info.get('payment', '?')}원 · 환승 {info.get('busTransitCount', 0) + info.get('subwayTransitCount', 0)}회"
+        ),
+        color=discord.Color.teal(),
         timestamp=datetime.datetime.now(),
     )
-    embed.set_footer(text=f"작성자: {interaction.user.display_name}")
+
+    daily_type = get_today_daily_type_code()
+
+    for i, sub_path in enumerate(sub_paths, start=1):
+        summary = summarize_subpath(sub_path)
+        traffic_type = sub_path.get("trafficType")
+
+        realtime_note = None
+        if traffic_type == 2:  # 버스 구간 → TAGO 실시간 시도
+            lane = sub_path.get("lane", {})
+            if isinstance(lane, list):
+                lane = lane[0] if lane else {}
+            bus_no = lane.get("busNo")
+            board_name = sub_path.get("startName")
+
+            if bus_no and board_name:
+                ok_lane, lanes = await asyncio.to_thread(odsay_search_bus_lane, bus_no, None)
+                ok_stop, stops = await asyncio.to_thread(odsay_search_station, board_name, "1")
+
+                route_id = None
+                if ok_lane and lanes:
+                    route_id = lanes[0].get("localBusID")
+                node_id = None
+                if ok_stop and stops:
+                    node_id = stops[0].get("localStationID")
+
+                print(
+                    f"[길찾기 버스매칭] bus_no={bus_no} board={board_name} route_id={route_id} "
+                    f"node_id={node_id} (lane 후보 {len(lanes) if ok_lane else 0}개)"
+                )
+                if route_id and node_id:
+                    ok_arr, arrivals = await asyncio.to_thread(
+                        get_arrival_info, DEFAULT_CITY_CODE, node_id, route_id
+                    )
+                    print(f"[길찾기 버스매칭] TAGO 도착정보 ok={ok_arr} 결과={arrivals if not ok_arr else len(arrivals)}건")
+                    if ok_arr and arrivals:
+                        arrivals.sort(key=lambda b: int(b.get("arrtime", "0") or 0))
+                        first = arrivals[0]
+                        minutes = int(first.get("arrtime", "0") or 0) // 60
+                        realtime_note = f"⏱️ 실시간: {minutes}분 후 도착 ({first.get('arrprevstationcnt', '?')}개 전)"
+
+        elif traffic_type == 1:  # 지하철 구간 → TAGO 고정 시간표 기준 '다음 열차' (방면이 일치할 때만)
+            lane = sub_path.get("lane", {})
+            if isinstance(lane, list):
+                lane = lane[0] if lane else {}
+            realtime_note = await asyncio.to_thread(
+                get_subway_realtime_note,
+                sub_path.get("startName"),
+                lane.get("name", ""),
+                sub_path.get("way", ""),
+                daily_type,
+            )
+
+        field_value = summary + (f"\n{realtime_note}" if realtime_note else "")
+        embed.add_field(name=f"{i}단계", value=field_value, inline=False)
+
+    embed.set_footer(text="경로 탐색: ODsay · 실시간 정보(가능한 구간): 국토교통부(TAGO)")
     await interaction.followup.send(embed=embed)
-
-
-@bot.tree.command(name="게시글목록", description="게시판 글 목록을 조회합니다.")
-@app_commands.describe(page="페이지 번호 (1부터, 기본 1)")
-async def list_posts(interaction: discord.Interaction, page: int = 1):
-    await interaction.response.defer()
-
-    if page < 1:
-        await interaction.followup.send("⚠️ 페이지 번호는 1 이상이어야 합니다.")
-        return
-
-    page_size = 10
-    posts, total = await asyncio.to_thread(db_list_posts, page_size, (page - 1) * page_size)
-
-    if total == 0:
-        await interaction.followup.send("📋 아직 작성된 게시글이 없습니다.")
-        return
-    if not posts:
-        await interaction.followup.send(f"⚠️ {page}페이지에는 게시글이 없습니다. (전체 {total}건)")
-        return
-
-    total_pages = (total + page_size - 1) // page_size
-    lines = [f"`#{p['id']}` **{p['title']}** · {p['author_name']} · {p['created_at']}" for p in posts]
-
-    embed = discord.Embed(
-        title="📋 게시판 목록",
-        description="\n".join(lines),
-        color=discord.Color.blue(),
-    )
-    embed.set_footer(text=f"{page}/{total_pages} 페이지 · 전체 {total}건 · /게시글보기 번호로 상세 확인")
-    await interaction.followup.send(embed=embed)
-
-
-@bot.tree.command(name="게시글보기", description="게시글 번호로 상세 내용을 봅니다.")
-@app_commands.describe(post_id="게시글 번호")
-async def view_post(interaction: discord.Interaction, post_id: int):
-    await interaction.response.defer()
-
-    post = await asyncio.to_thread(db_get_post, post_id)
-    if not post:
-        await interaction.followup.send(f"⚠️ {post_id}번 게시글을 찾을 수 없습니다.")
-        return
-
-    embed = discord.Embed(
-        title=f"[{post['id']}] {post['title']}",
-        description=post["content"],
-        color=discord.Color.blue(),
-    )
-    footer = f"작성자: {post['author_name']} · 작성: {post['created_at']}"
-    if post["updated_at"] != post["created_at"]:
-        footer += f" · 수정: {post['updated_at']}"
-    embed.set_footer(text=footer)
-    await interaction.followup.send(embed=embed)
-
-
-@bot.tree.command(name="게시글수정", description="본인이 작성한 게시글을 수정합니다.")
-@app_commands.describe(post_id="수정할 게시글 번호", title="새 제목", content="새 내용")
-async def edit_post(interaction: discord.Interaction, post_id: int, title: str, content: str):
-    await interaction.response.defer()
-
-    ok, message = await asyncio.to_thread(db_update_post, post_id, title, content, interaction.user.id)
-    if not ok:
-        await interaction.followup.send(f"⚠️ {message}")
-        return
-
-    embed = discord.Embed(
-        title=f"✏️ [{post_id}] 수정 완료",
-        description=f"**{title}**\n{content}",
-        color=discord.Color.orange(),
-        timestamp=datetime.datetime.now(),
-    )
-    await interaction.followup.send(embed=embed)
-
-
-@bot.tree.command(name="게시글삭제", description="본인이 작성한 게시글을 삭제합니다.")
-@app_commands.describe(post_id="삭제할 게시글 번호")
-async def delete_post(interaction: discord.Interaction, post_id: int):
-    await interaction.response.defer()
-
-    ok, message = await asyncio.to_thread(db_delete_post, post_id, interaction.user.id)
-    if not ok:
-        await interaction.followup.send(f"⚠️ {message}")
-        return
-
-    await interaction.followup.send(f"🗑️ {post_id}번 게시글이 삭제되었습니다.")
-
-
-# --- 🔧 /지하철디버그 명령어: 시간표 API의 날것 응답을 그대로 보여줌 ---
-@bot.tree.command(name="지하철디버그", description="[개발용] 지하철역 시간표 API의 원본 응답을 확인합니다.")
-@app_commands.describe(
-    station_id="지하철역ID (예: MTRICI2203, /지하철역검색으로 확인)",
-    up_down="상행(U)/하행(D)",
-    daily_type="요일구분 (생략 시 오늘 기준)",
-)
-@app_commands.choices(
-    up_down=[
-        app_commands.Choice(name="U (상행)", value="U"),
-        app_commands.Choice(name="D (하행)", value="D"),
-    ],
-    daily_type=[
-        app_commands.Choice(name="평일", value="01"),
-        app_commands.Choice(name="토요일", value="02"),
-        app_commands.Choice(name="일요일", value="03"),
-    ],
-)
-async def subway_debug(
-    interaction: discord.Interaction,
-    station_id: str,
-    up_down: app_commands.Choice[str],
-    daily_type: app_commands.Choice[str] = None,
-):
-    await interaction.response.defer()
-
-    daily_type_value = daily_type.value if daily_type else get_today_daily_type_code()
-    url = f"{TAGO_HOST}/SubwayInfo/GetSubwaySttnAcctoSchdulList"
-    params = {
-        "serviceKey": TAGO_API_KEY,
-        "subwayStationId": station_id,
-        "dailyTypeCode": daily_type_value,
-        "upDownTypeCode": up_down.value,
-        "numOfRows": "10",
-        "pageNo": "1",
-        "_type": "xml",
-    }
-
-    def _fetch_raw():
-        try:
-            response = requests.get(url, params=params, headers=REQUEST_HEADERS, timeout=5)
-            return response.status_code, response.text
-        except requests.exceptions.RequestException as e:
-            return None, str(e)
-
-    status_code, raw_text = await asyncio.to_thread(_fetch_raw)
-
-    if status_code is None:
-        await interaction.followup.send(f"⚠️ 네트워크 오류: {raw_text}")
-        return
-
-    snippet = raw_text[:1200]
-    await interaction.followup.send(
-        f"요청: `dailyTypeCode={daily_type_value}, upDownTypeCode={up_down.value}, subwayStationId={station_id}`\n"
-        f"HTTP {status_code}\n```xml\n{snippet}\n```"
-    )
-
 
 # -------------------------------------------------------------------------------------------
 if __name__ == "__main__":
