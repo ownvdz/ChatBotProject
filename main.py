@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import math
 import asyncio
 import datetime
 import requests
@@ -452,9 +453,12 @@ def get_route_bus_locations(city_code: str, route_id: str, num_of_rows: int = 10
 #
 # 그래서 구조는:
 #   1) ODsay로 경로 탐색 (어느 구간에서 어느 버스/지하철을 타는지)
-#   2) ODsay의 localStationID로 그 정류장/역의 TAGO nodeId를 얻음
-#      (인천은 localStationID가 TAGO와 같은 "ICB..." 형식이라 그대로 쓸 수 있음)
-#   3) 그 nodeId + routeId로 위에서 이미 만든 TAGO 실시간 함수를 그대로 재사용
+#   2) 버스 구간: ODsay의 ID(localBusID/localStationID)는 TAGO의 "ICB..." 형식과
+#      달라서(실측: route_id=217000005, node_id=163000617) 그대로 쓸 수 없다.
+#      대신 ODsay가 알려준 노선번호/탑승·하차 정류장 "이름"으로 TAGO에서 직접
+#      routeId/nodeId를 찾는다 (get_bus_realtime_note).
+#   3) 지하철 구간: 탑승역/노선/방면(way)으로 TAGO 고정 시간표를 조회한다
+#      (get_subway_realtime_note).
 #
 # 출력 포맷은 XML 대신 json으로 받는다 (파싱이 더 간단해서 버스/지하철 TAGO
 # 코드와는 다르게 처리한다).
@@ -603,10 +607,19 @@ def _strip_station_suffix(name: str) -> str:
     return name[:-1] if name.endswith("역") else name
 
 
-def get_subway_realtime_note(board_name: str, line_name: str, way: str, daily_type: str):
-    """/길찾기의 지하철 구간용: 탑승역/노선/방면으로 TAGO 시간표에서 '다음 열차' 문구를 만든다.
-    방향은 하차역(endName)이 아니라 ODsay의 way(방면)와 열차의 실제 종점역명을 비교해서
-    판단한다. 찾지 못하면 None을 반환 (그 구간은 경로 요약만 표시됨)."""
+# /지하철을 인자 없이 입력했을 때 보여줄 기본 구간 (인천2호선: 검단오류 ↔ 운연)
+# (탑승역, 도착역(표시용), 방면=진행 방향 종점역)
+DEFAULT_SUBWAY_LINE = "인천2호선"
+DEFAULT_SUBWAY_ROUTES = [
+    ("마전역", "주안역", "운연"),
+    ("주안역", "마전역", "검단오류"),
+]
+
+
+def find_next_trains(board_name: str, line_name: str, way: str, daily_type: str, limit: int = 3):
+    """탑승역/노선/방면(진행 방향 종점)으로 TAGO 시간표에서 '지금 이후' 다음 열차들을 찾는다.
+    방향은 열차 자신의 실제 종점역명(endSubwayStationNm)과 way를 비교해서 판단한다.
+    반환: None(못 찾음) 또는 {"station", "terminus", "trains": [(HH:MM, 남은분), ...], "fallback": 평일대체여부}"""
     if not board_name or not way:
         return None
     ok, matches = get_subway_station_matches(board_name, line_name or None)
@@ -636,16 +649,248 @@ def get_subway_realtime_note(board_name: str, line_name: str, way: str, daily_ty
                 (it for it in g_items if it.get("depTime", "").isdigit() and it["depTime"] >= now_hhmmss),
                 key=lambda it: it["depTime"],
             )
-            if not upcoming:
-                return f"⏱️ 오늘 남은 열차가 없습니다 ({g_name}행)"
+            trains = []
+            for it in upcoming[:limit]:
+                dep = it["depTime"]
+                dep_seconds = int(dep[0:2]) * 3600 + int(dep[2:4]) * 60 + int(dep[4:6])
+                trains.append((f"{dep[0:2]}:{dep[2:4]}", max((dep_seconds - now_seconds) // 60, 0)))
+            return {
+                "station": cand.get("subwayStationName", board_name),
+                "terminus": g_name,
+                "trains": trains,
+                "fallback": bool(used_fallback),
+            }
+    return None
 
-            dep = upcoming[0]["depTime"]
-            dep_seconds = int(dep[0:2]) * 3600 + int(dep[2:4]) * 60 + int(dep[4:6])
-            remain_min = max((dep_seconds - now_seconds) // 60, 0)
-            note = f"⏱️ 시간표상 다음 열차: {dep[0:2]}:{dep[2:4]} 출발 (약 {remain_min}분 후, {g_name}행)"
-            if used_fallback:
-                note += " · 오늘 운행정보가 없어 평일 시간표 기준"
-            return note
+
+def get_subway_realtime_note(board_name: str, line_name: str, way: str, daily_type: str):
+    """/길찾기의 지하철 구간용: 탑승역/노선/방면으로 '다음 열차' 한 줄 문구를 만든다.
+    방향은 하차역(endName)이 아니라 ODsay의 way(방면)로 판단한다. 찾지 못하면 None."""
+    r = find_next_trains(board_name, line_name, way, daily_type, limit=1)
+    if not r:
+        return None
+    if not r["trains"]:
+        return f"⏱️ 오늘 남은 열차가 없습니다 ({r['terminus']}행)"
+    hhmm, remain_min = r["trains"][0]
+    note = f"⏱️ 시간표상 다음 열차: {hhmm} 출발 (약 {remain_min}분 후, {r['terminus']}행)"
+    if r["fallback"]:
+        note += " · 오늘 운행정보가 없어 평일 시간표 기준"
+    return note
+
+
+# --- /길찾기 버스 구간용: ODsay ID 대신 TAGO에서 노선번호/좌표/정류소명으로 직접 매칭 ---
+# (실측 결과 ODsay의 localBusID/localStationID는 TAGO의 ICB... 형식이 아니라서 그대로 쓸 수 없었음)
+# TAGO 가이드 기준: 노선/정류소 정보는 일 1회 갱신, 도착정보는 실시간(10~20초) 갱신.
+ROUTE_INFO_TTL_SEC = 24 * 3600
+ARRIVAL_TTL_SEC = 15
+BOARD_MATCH_RADIUS_M = 150   # 탑승 정류장: ODsay 좌표와 TAGO 좌표 차이를 넉넉히 허용
+END_MATCH_RADIUS_M = 60      # 하차 정류장: 방향 판정용이라 이웃 정류소가 섞이지 않게 좁게
+
+_route_stops_by_id = {}   # route_id -> (저장시각, stops)
+_route_info_by_id = {}    # route_id -> (저장시각, info dict)
+_arrival_cache = {}       # (node_id, route_id) -> (저장시각, ok, arrivals)
+
+
+def get_route_no_list(city_code: str, route_no: str):
+    """TAGO 노선번호목록조회: 노선번호(예: 511)로 해당 도시의 routeid 후보를 찾는다."""
+    url = f"{TAGO_HOST}/BusRouteInfoInqireService/getRouteNoList"
+    params = {
+        "serviceKey": TAGO_API_KEY,
+        "cityCode": city_code,
+        "routeNo": route_no,
+        "numOfRows": "50",
+        "pageNo": "1",
+        "_type": "xml",
+    }
+    return _fetch_tago_xml(url, params)
+
+
+def get_stops_for_route(city_code: str, route_id: str):
+    """노선별 경유 정류소 목록 (노선마다 캐싱, 일 1회 갱신 데이터라 24시간 TTL)."""
+    cached = _route_stops_by_id.get(route_id)
+    if cached and time.time() - cached[0] < ROUTE_INFO_TTL_SEC:
+        return True, cached[1]
+    ok, result = get_route_stops(city_code, route_id, num_of_rows=300)
+    if ok and result:
+        _route_stops_by_id[route_id] = (time.time(), result)
+    return ok, result
+
+
+def get_route_info(city_code: str, route_id: str):
+    """TAGO 노선정보항목조회(getRouteInfoIem): 첫차/막차/배차간격. 실패하면 None."""
+    cached = _route_info_by_id.get(route_id)
+    if cached and time.time() - cached[0] < ROUTE_INFO_TTL_SEC:
+        return cached[1]
+    url = f"{TAGO_HOST}/BusRouteInfoInqireService/getRouteInfoIem"
+    params = {"serviceKey": TAGO_API_KEY, "cityCode": city_code, "routeId": route_id, "_type": "xml"}
+    ok, items = _fetch_tago_xml(url, params)
+    if not (ok and items):
+        return None
+    _route_info_by_id[route_id] = (time.time(), items[0])
+    return items[0]
+
+
+def get_arrival_info_cached(city_code: str, node_id: str, route_id: str):
+    """도착정보는 10~20초마다 갱신되므로 15초 동안은 같은 결과를 재사용 (여러 명이 동시에 조회해도 API 호출 절약)."""
+    key = (node_id, route_id)
+    cached = _arrival_cache.get(key)
+    if cached and time.time() - cached[0] < ARRIVAL_TTL_SEC:
+        return cached[1], list(cached[2]) if cached[1] else cached[2]
+    ok, arrivals = get_arrival_info(city_code, node_id, route_id)
+    if ok:
+        _arrival_cache[key] = (time.time(), ok, list(arrivals))
+    return ok, arrivals
+
+
+def _to_float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_xy(x, y):
+    """ODsay 좌표(x=경도, y=위도) → (경도, 위도) 튜플. 값이 없거나 이상하면 None."""
+    fx, fy = _to_float(x), _to_float(y)
+    return (fx, fy) if fx is not None and fy is not None else None
+
+
+def _haversine_m(lat1, lon1, lat2, lon2):
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _stops_near(stops: list, xy, radius_m: float = BOARD_MATCH_RADIUS_M):
+    """좌표(경도, 위도) 반경 안의 정류소 [(정류소, 거리m)] — TAGO 경유정류소의 gpslati/gpslong 사용."""
+    if not xy:
+        return []
+    lon, lat = xy
+    out = []
+    for st in stops:
+        slat, slon = _to_float(st.get("gpslati")), _to_float(st.get("gpslong"))
+        if not st.get("nodeid") or slat is None or slon is None:
+            continue
+        d = _haversine_m(lat, lon, slat, slon)
+        if d <= radius_m:
+            out.append((st, d))
+    return out
+
+
+def _match_stops_by_name(stops: list, name: str):
+    """이름이 일치하는 정류소 레코드 전부. 공백 차이는 무시하고, 정확히 일치하는 게 없을 때만 부분일치."""
+    key = _normalize(name or "")
+    if not key:
+        return []
+    exact = [s for s in stops if _normalize(s.get("nodenm", "")) == key and s.get("nodeid")]
+    if exact:
+        return exact
+    return [s for s in stops if s.get("nodeid") and key in _normalize(s.get("nodenm", ""))]
+
+
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def order_board_candidates(stops: list, board_name: str, end_name: str, board_xy=None, end_xy=None):
+    """탑승 정류소 후보를 가장 유력한 순서로 정렬해 반환.
+    - 하차 정류장이 진행 방향 앞쪽(nodeord가 더 큼)에 있어야 올바른 방향이다
+      (nodeord는 노선 전체를 관통하는 연속 번호).
+    - 탑승 좌표가 있으면 반경 안의 정류소 중에서 (방향 일치 → 이름 일치 → 거리) 순으로 고른다.
+      이름 표기가 ODsay와 달라도, 도로 양쪽 정류장이 섞여도 좌표+방향으로 구분된다.
+    - 좌표가 없거나 반경 안에 없으면 이름 기반으로 되돌아간다."""
+    end_stops = {id(e): e for e in _match_stops_by_name(stops, end_name)}
+    for e, _d in _stops_near(stops, end_xy, END_MATCH_RADIUS_M):
+        end_stops[id(e)] = e
+    end_ords = [o for o in (_safe_int(e.get("nodeord")) for e in end_stops.values()) if o is not None]
+
+    def forward_ords(b):
+        bo = _safe_int(b.get("nodeord"))
+        return [eo - bo for eo in end_ords if bo is not None and eo > bo]
+
+    nearby = _stops_near(stops, board_xy)
+    if nearby:
+        name_key = _normalize(board_name or "")
+
+        def key(item):
+            st, dist = item
+            direction_ok = (not end_ords) or bool(forward_ords(st))
+            name_ok = bool(name_key) and _normalize(st.get("nodenm", "")) == name_key
+            return (0 if direction_ok else 1, 0 if name_ok else 1, dist)
+
+        return [st for st, _d in sorted(nearby, key=key)]
+
+    boards = _match_stops_by_name(stops, board_name)
+    return sorted(boards, key=lambda b: min(forward_ords(b)) if forward_ords(b) else float("inf"))
+
+
+def _fmt_hhmm(v):
+    v = (v or "").strip()
+    return f"{v[:2]}:{v[2:]}" if len(v) == 4 and v.isdigit() else ""
+
+
+def _route_hint(city_code: str, route_id: str):
+    """도착 예정 버스가 없을 때 덧붙일 노선 정보 (첫차/막차/배차간격). 없으면 빈 문자열."""
+    info = get_route_info(city_code, route_id)
+    if not info:
+        return ""
+    parts = []
+    first, last = _fmt_hhmm(info.get("startvehicletime")), _fmt_hhmm(info.get("endvehicletime"))
+    if first and last:
+        parts.append(f"첫차 {first} · 막차 {last}")
+    wd = datetime.datetime.now().weekday()
+    interval = (info.get("intervaltime" if wd < 5 else "intervalsattime" if wd == 5 else "intervalsuntime") or "").strip()
+    if interval.isdigit():
+        parts.append(f"배차간격 약 {interval}분")
+    return f" ({' · '.join(parts)})" if parts else ""
+
+
+def get_bus_realtime_note(bus_no: str, board_name: str, end_name: str, board_xy=None, end_xy=None):
+    """/길찾기의 버스 구간용: 노선번호 + 탑승/하차 정류장(이름·좌표)으로 TAGO 실시간 도착 문구를 만든다.
+    노선/정류소를 매칭하지 못하면 None (그 구간은 경로 요약만 표시)."""
+    if not bus_no or not board_name:
+        return None
+
+    ok, routes = get_route_no_list(DEFAULT_CITY_CODE, bus_no)
+    route_ids = []
+    if ok and routes:
+        route_ids = [r.get("routeid") for r in routes if str(r.get("routeno", "")).strip() == str(bus_no).strip() and r.get("routeid")]
+    # 노선번호 검색 API가 실패해도 프로젝트 기본 대상인 511번은 항상 조회 가능하도록 보장
+    if not route_ids and str(bus_no).strip() == "511":
+        route_ids = [DEFAULT_ROUTE_ID]
+    print(f"[길찾기 버스매칭] bus_no={bus_no} board={board_name} end={end_name} board_xy={board_xy} TAGO route_ids={route_ids}")
+
+    for route_id in route_ids:
+        ok_st, stops = get_stops_for_route(DEFAULT_CITY_CODE, route_id)
+        if not (ok_st and stops):
+            continue
+        candidates = order_board_candidates(stops, board_name, end_name, board_xy, end_xy)
+        if not candidates:
+            continue
+
+        seen = set()
+        for cand in candidates[:4]:
+            node_id = cand.get("nodeid")
+            if not node_id or node_id in seen:
+                continue
+            seen.add(node_id)
+            ok_arr, arrivals = get_arrival_info_cached(DEFAULT_CITY_CODE, node_id, route_id)
+            print(
+                f"[길찾기 버스매칭] route_id={route_id} node_id={node_id} nodenm={cand.get('nodenm')} "
+                f"nodeord={cand.get('nodeord')} 도착정보 ok={ok_arr} {len(arrivals) if ok_arr else arrivals}"
+            )
+            if ok_arr and arrivals:
+                arrivals.sort(key=lambda b: int(b.get("arrtime", "0") or 0))
+                first = arrivals[0]
+                minutes = int(first.get("arrtime", "0") or 0) // 60
+                return f"⏱️ 실시간: {minutes}분 후 도착 ({first.get('arrprevstationcnt', '?')}개 전)"
+        # 노선과 정류소는 매칭됐지만 지금 운행 중인 도착 예정 버스가 없는 경우
+        return "⏱️ 현재 도착 예정 버스 정보가 없습니다" + _route_hint(DEFAULT_CITY_CODE, route_id)
     return None
 
 
@@ -717,13 +962,48 @@ async def show_timetable(interaction: discord.Interaction, day: app_commands.Cho
 
 
 # -------------------------------------------------------------------------------------------
-@bot.tree.command(name="지하철", description="지정한 호선/역의 양방향 다음 열차 운행정보를 조회합니다.")
-@app_commands.describe(line="호선 이름 (예: 인천2호선)", station="역 이름 (예: 검단사거리역)")
-async def show_subway(interaction: discord.Interaction, line: str, station: str):
+@bot.tree.command(name="지하철", description="호선/역의 양방향 다음 열차를 조회합니다. (아무것도 입력하지 않으면 마전역↔주안역)")
+@app_commands.describe(
+    line="호선 이름 (예: 인천2호선) — 생략하면 마전역↔주안역 기본 구간",
+    station="역 이름 (예: 검단사거리역)",
+)
+async def show_subway(interaction: discord.Interaction, line: str = None, station: str = None):
     await interaction.response.defer()
 
     if not TAGO_API_KEY:
         await interaction.followup.send("⚠️ PUBLIC_TAGO_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+        return
+
+    # 인자를 모두 생략하면 기본 구간(마전역→주안역, 주안역→마전역)을 보여준다.
+    if not line and not station:
+        now = datetime.datetime.now()
+        daily_type = get_today_daily_type_code()
+        embed = discord.Embed(
+            title=f"🚇 {DEFAULT_SUBWAY_LINE} 마전역 ↔ 주안역 다음 열차",
+            color=discord.Color.green(),
+            timestamp=now,
+        )
+        used_fallback = False
+        for board, dest, way in DEFAULT_SUBWAY_ROUTES:
+            r = await asyncio.to_thread(find_next_trains, board, DEFAULT_SUBWAY_LINE, way, daily_type, 3)
+            field_name = f"{board} → {dest} ({way}행)"
+            if r is None:
+                embed.add_field(name=field_name, value="운행정보를 찾지 못했습니다.", inline=False)
+                continue
+            used_fallback = used_fallback or r["fallback"]
+            if not r["trains"]:
+                embed.add_field(name=field_name, value="오늘 남은 열차가 없습니다.", inline=False)
+                continue
+            lines = [f"**{hhmm} 출발** (약 {remain}분 후)" for hhmm, remain in r["trains"]]
+            embed.add_field(name=field_name, value="\n".join(lines), inline=False)
+        if used_fallback:
+            embed.description = "⚠️ 오늘 운행정보가 등록되어 있지 않은 역이 있어 **평일 시간표**를 참고용으로 보여드려요."
+        embed.set_footer(text="국토교통부(TAGO) 지하철정보 API 기반 · 실시간 도착정보가 아닌 고정 운행정보(주1회 갱신)입니다")
+        await interaction.followup.send(embed=embed)
+        return
+
+    if not station:
+        await interaction.followup.send("⚠️ 역 이름도 함께 입력해주세요. (예: /지하철 line:인천2호선 station:검단사거리역)")
         return
 
     ok, matches = await asyncio.to_thread(get_subway_station_matches, station, line)
@@ -773,7 +1053,7 @@ async def show_subway(interaction: discord.Interaction, line: str, station: str)
     direction_groups = group_by_destination(all_items, top_n=2)
 
     embed = discord.Embed(
-        title=f"🚇 {matched_station.get('subwayStationName', station)} ({line}) 다음 열차",
+        title=f"🚇 {matched_station.get('subwayStationName', station)}{f' ({line})' if line else ''} 다음 열차",
         color=discord.Color.green(),
         timestamp=now,
     )
@@ -973,38 +1253,18 @@ async def find_route(interaction: discord.Interaction, start: str, goal: str):
         traffic_type = sub_path.get("trafficType")
 
         realtime_note = None
-        if traffic_type == 2:  # 버스 구간 → TAGO 실시간 시도
+        if traffic_type == 2:  # 버스 구간 → TAGO 실시간 (노선번호/정류장 이름으로 직접 매칭)
             lane = sub_path.get("lane", {})
             if isinstance(lane, list):
                 lane = lane[0] if lane else {}
-            bus_no = lane.get("busNo")
-            board_name = sub_path.get("startName")
-
-            if bus_no and board_name:
-                ok_lane, lanes = await asyncio.to_thread(odsay_search_bus_lane, bus_no, None)
-                ok_stop, stops = await asyncio.to_thread(odsay_search_station, board_name, "1")
-
-                route_id = None
-                if ok_lane and lanes:
-                    route_id = lanes[0].get("localBusID")
-                node_id = None
-                if ok_stop and stops:
-                    node_id = stops[0].get("localStationID")
-
-                print(
-                    f"[길찾기 버스매칭] bus_no={bus_no} board={board_name} route_id={route_id} "
-                    f"node_id={node_id} (lane 후보 {len(lanes) if ok_lane else 0}개)"
-                )
-                if route_id and node_id:
-                    ok_arr, arrivals = await asyncio.to_thread(
-                        get_arrival_info, DEFAULT_CITY_CODE, node_id, route_id
-                    )
-                    print(f"[길찾기 버스매칭] TAGO 도착정보 ok={ok_arr} 결과={arrivals if not ok_arr else len(arrivals)}건")
-                    if ok_arr and arrivals:
-                        arrivals.sort(key=lambda b: int(b.get("arrtime", "0") or 0))
-                        first = arrivals[0]
-                        minutes = int(first.get("arrtime", "0") or 0) // 60
-                        realtime_note = f"⏱️ 실시간: {minutes}분 후 도착 ({first.get('arrprevstationcnt', '?')}개 전)"
+            realtime_note = await asyncio.to_thread(
+                get_bus_realtime_note,
+                lane.get("busNo"),
+                sub_path.get("startName"),
+                sub_path.get("endName"),
+                _to_xy(sub_path.get("startX"), sub_path.get("startY")),
+                _to_xy(sub_path.get("endX"), sub_path.get("endY")),
+            )
 
         elif traffic_type == 1:  # 지하철 구간 → TAGO 고정 시간표 기준 '다음 열차' (방면이 일치할 때만)
             lane = sub_path.get("lane", {})
