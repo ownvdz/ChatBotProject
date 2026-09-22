@@ -1,3 +1,5 @@
+https://ownvdz.github.io/ChatBotProject/
+
 # 통학길 — 대중교통·학사 웹 서비스
 
 디스코드 봇(`main.py`)을 FastAPI 웹 서비스로 전환한 버전이다. 첨부해주신 기존 `main.py`는 그대로
