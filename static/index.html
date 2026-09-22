@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1a30">
+  <meta name="description" content="인하대·인천대 학생을 위한 인천 버스·지하철 실시간 정보와 길찾기, 수업 시간표">
+  <title>통학길 — 인하대·인천대 대중교통</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1a30'/%3E%3Crect x='6' y='13' width='20' height='6' rx='3' fill='%23ffb833'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">본문으로 건너뛰기</a>
+
+  <header class="top">
+    <h1 class="brand">통학길</h1>
+    <p class="clock" id="clock"></p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="기능 선택">
+    <button class="tab" role="tab" id="tab-route" aria-controls="panel-route" aria-selected="true" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>
+      <span>길찾기</span>
+    </button>
+    <button class="tab" role="tab" id="tab-subway" aria-controls="panel-subway" aria-selected="false" tabindex="-1" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8.5 17 6.5 21M15.5 17l2 4"/><circle cx="9" cy="14" r=".6"/><circle cx="15" cy="14" r=".6"/></svg>
+      <span>지하철</span>
+    </button>
+    <button class="tab" role="tab" id="tab-bus" aria-controls="panel-bus" aria-selected="false" tabindex="-1" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="13" rx="2.5"/><path d="M4 11h16M7 17v3M17 17v3"/><circle cx="8" cy="14" r=".7"/><circle cx="16" cy="14" r=".7"/></svg>
+      <span>버스</span>
+    </button>
+    <button class="tab" role="tab" id="tab-timetable" aria-controls="panel-timetable" aria-selected="false" tabindex="-1" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+      <span>시간표</span>
+    </button>
+  </div>
+
+  <main id="main">
+    <!-- 길찾기 -->
+    <section class="panel" role="tabpanel" id="panel-route" aria-labelledby="tab-route">
+      <h2>길찾기</h2>
+      <p class="lede">정류장이나 역 이름으로 찾으면 버스·지하철 구간마다 다음 차 정보를 함께 보여줘요.</p>
+
+      <form id="route-form" novalidate>
+        <div class="field">
+          <label for="route-start">출발</label>
+          <div class="field-row">
+            <input id="route-start" name="start" type="text" maxlength="40" list="places" autocomplete="off" enterkeyhint="next" placeholder="예: 마전역">
+            <button class="btn btn-ghost" id="btn-locate" type="button">현재 위치</button>
+          </div>
+          <p class="hint" id="locate-status" role="status"></p>
+        </div>
+
+        <div class="swap-row">
+          <button class="btn btn-ghost btn-small" id="btn-swap" type="button">출발·도착 바꾸기</button>
+        </div>
+
+        <div class="field">
+          <label for="route-goal">도착</label>
+          <input id="route-goal" name="goal" type="text" maxlength="40" list="places" autocomplete="off" enterkeyhint="search" placeholder="예: 정석항공과학고">
+        </div>
+
+        <button class="btn btn-primary btn-block" id="route-submit" type="submit">경로 찾기</button>
+      </form>
+
+      <datalist id="places">
+        <option value="마전역"></option>
+        <option value="주안역"></option>
+        <option value="주안역환승정류장"></option>
+        <option value="정석항공과학고"></option>
+      </datalist>
+
+      <div id="route-result" aria-live="polite"></div>
+    </section>
+
+    <!-- 지하철 -->
+    <section class="panel" role="tabpanel" id="panel-subway" aria-labelledby="tab-subway" hidden>
+      <div class="panel-head">
+        <h2>지하철</h2>
+        <button class="btn btn-ghost btn-small" id="subway-refresh" type="button">새로고침</button>
+      </div>
+      <p class="lede">실시간 위치가 아니라 시간표 기준이에요. 남은 시간은 지금 시각과 비교해 계산해요.</p>
+      <div id="subway-default" aria-live="polite"></div>
+
+      <h2 class="sub-h">다른 역 찾기</h2>
+      <form id="subway-form" novalidate>
+        <div class="field">
+          <label for="subway-line">호선 <span class="optional">(선택)</span></label>
+          <input id="subway-line" name="line" type="text" maxlength="20" list="lines" autocomplete="off" placeholder="예: 인천2호선">
+          <datalist id="lines">
+            <option value="인천1호선"></option>
+            <option value="인천2호선"></option>
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="subway-station">역 이름</label>
+          <input id="subway-station" name="station" type="text" maxlength="30" autocomplete="off" enterkeyhint="search" placeholder="예: 검단사거리역">
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">다음 열차 보기</button>
+      </form>
+      <div id="subway-result" aria-live="polite"></div>
+    </section>
+
+    <!-- 버스 -->
+    <section class="panel" role="tabpanel" id="panel-bus" aria-labelledby="tab-bus" hidden>
+      <div class="panel-head">
+        <h2>511번 버스</h2>
+        <button class="btn btn-ghost btn-small" id="bus-refresh" type="button">새로고침</button>
+      </div>
+      <p class="lede" id="bus-updated">이 화면을 보고 있는 동안 20초마다 새로 불러와요.</p>
+      <div id="bus-arrivals" aria-live="polite"></div>
+      <h2 class="sub-h">운행 중인 버스</h2>
+      <div id="bus-locations" aria-live="polite"></div>
+    </section>
+
+    <!-- 시간표 -->
+    <section class="panel" role="tabpanel" id="panel-timetable" aria-labelledby="tab-timetable" hidden>
+      <h2>시간표</h2>
+      <div class="days" id="timetable-days" role="group" aria-label="요일 선택"></div>
+      <div id="timetable-result" aria-live="polite"></div>
+    </section>
+
+    <p class="credit">경로 탐색은 ODsay, 버스·지하철 정보는 국토교통부(공공데이터포털 TAGO) 자료예요.</p>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,3 +1,8 @@
-discord.py
-python-dotenv
-requests
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30,<0.31
+requests>=2.32,<3
+python-dotenv>=1.0,<2
+
+# Windows 개발 환경에는 IANA 시간대 DB가 기본으로 없어서 zoneinfo("Asia/Seoul")가 실패할 수 있다.
+# Oracle(Ubuntu 22.04) 서버에는 tzdata 패키지가 보통 이미 있지만, pip 패키지도 함께 넣어 어느 쪽이든 안전하게 한다.
+tzdata>=2024.1

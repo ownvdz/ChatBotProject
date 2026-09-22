@@ -1,0 +1,235 @@
+/*
+  통학길 — 스타일
+  컨셉: 정류장 도착 안내기(전광판). 화면 대부분은 차분한 회청색 종이 위의 글자이고,
+  "다음 차가 언제 오나"만 어두운 판 위의 호박색 LED 숫자로 보여준다. 그 밖의 장식은 뺐다.
+*/
+:root {
+  --fog: #eef2f6;        /* 배경 */
+  --surface: #ffffff;    /* 입력창 */
+  --ink: #15223a;        /* 본문 글자, 기본 버튼 */
+  --muted: #536077;      /* 보조 글자 */
+  --edge: #6f7e96;       /* 입력창 테두리 (배경 대비 3:1 이상) */
+  --rule: #cfd7e2;       /* 옅은 구분선 */
+  --board: #0f1a30;      /* 전광판 바탕 */
+  --board-rule: rgba(255, 255, 255, 0.14);
+  --board-text: #e6ecf8;
+  --board-dim: #a9b5cc;
+  --led: #ffb833;        /* 전광판 숫자 */
+  --focus: #1f5fd6;
+  --bus: #2456a6;
+  --line1: #7ba7d7;      /* 인천1호선 */
+  --line2: #ed8b00;      /* 인천2호선 */
+  --line-other: #c3ccda;
+  --danger: #a8261c;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--fog);
+  color: var(--ink);
+  font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+}
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.skip {
+  position: absolute; left: 12px; top: -64px; z-index: 30;
+  background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 4px;
+}
+.skip:focus { top: 12px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---- 머리글 ---- */
+.top {
+  max-width: 720px; margin: 0 auto;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 8px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+}
+.brand { margin: 0; font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; }
+.clock { margin: 0; font-size: 0.875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---- 탭: 모바일에서는 아래 고정 (전광판처럼 어두운 띠) ---- */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--board);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 60px; padding: 6px 4px;
+  background: none; border: 0; border-top: 3px solid transparent;
+  color: var(--board-dim); font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+}
+.tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-selected="true"] { color: var(--led); border-top-color: var(--led); }
+.tab:focus-visible { outline: 3px solid var(--led); outline-offset: -6px; }
+
+/* ---- 본문 ---- */
+main { max-width: 720px; margin: 0 auto; padding: 4px 20px 40px; }
+h2 { margin: 20px 0 8px; font-size: 1.25rem; line-height: 1.3; letter-spacing: -0.01em; }
+h2.sub-h { margin-top: 36px; }
+h3 { margin: 0; font-size: 1rem; }
+.lede { margin: 0 0 18px; color: var(--muted); max-width: 34rem; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.panel-head h2 { margin-bottom: 8px; }
+.credit { margin: 40px 0 0; font-size: 0.8125rem; color: var(--muted); max-width: 34rem; }
+.optional { font-weight: 400; color: var(--muted); }
+
+/* ---- 폼 ---- */
+.field { margin: 0 0 14px; }
+label { display: block; margin-bottom: 6px; font-size: 0.9375rem; font-weight: 700; }
+input[type="text"] {
+  width: 100%; min-height: 48px; padding: 0 14px;
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--edge); border-radius: 4px;
+}
+input[type="text"]::placeholder { color: #7a879b; }
+.field-row { display: flex; gap: 8px; }
+.field-row input { flex: 1; min-width: 0; }
+.hint { margin: 6px 0 0; min-height: 1.4em; font-size: 0.875rem; color: var(--muted); }
+.hint.is-error { color: var(--danger); }
+.swap-row { margin: -4px 0 10px; }
+
+.btn {
+  min-height: 48px; padding: 0 18px;
+  font: inherit; font-weight: 700; line-height: 1.2; cursor: pointer;
+  border: 1.5px solid var(--ink); border-radius: 4px;
+}
+.btn-primary { background: var(--ink); color: #fff; }
+.btn-ghost { background: transparent; color: var(--ink); }
+.btn-small { min-height: 40px; padding: 0 14px; font-size: 0.9375rem; }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: 0.55; cursor: progress; }
+.btn-ghost:disabled { cursor: not-allowed; }
+
+/* ---- 상태 메시지 ---- */
+.message { margin: 18px 0; padding: 4px 0 4px 12px; border-left: 4px solid var(--rule); color: var(--muted); }
+.message.is-error { border-left-color: var(--danger); color: var(--danger); font-weight: 600; }
+.message strong { display: block; color: inherit; }
+.note { margin: 8px 0 0; padding: 2px 0 2px 10px; border-left: 3px solid var(--rule); font-size: 0.9375rem; color: var(--muted); }
+
+/* ---- 전광판 (이 화면의 중심 요소) ---- */
+.board {
+  margin: 0 0 14px;
+  background: var(--board); color: var(--board-text);
+  border-radius: 6px; overflow: hidden;
+}
+.board-head { padding: 12px 16px 10px; border-bottom: 1px solid var(--board-rule); }
+.board-head h3 { color: #fff; font-size: 1.0625rem; font-weight: 700; }
+.board-head p { margin: 2px 0 0; font-size: 0.875rem; color: var(--board-dim); }
+.board-row {
+  display: grid; grid-template-columns: 6.5rem 1fr; align-items: baseline; column-gap: 12px;
+  padding: 9px 16px;
+}
+.board-row + .board-row { border-top: 1px solid var(--board-rule); }
+.led {
+  font-size: 2rem; line-height: 1.1; font-weight: 800; letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums; color: var(--led);
+  text-shadow: 0 0 10px rgba(255, 184, 51, 0.35);
+}
+.led-word { font-size: 1.5rem; }
+.board-desc { font-size: 0.9375rem; color: var(--board-text); }
+.board-desc small { display: block; font-size: 0.8125rem; color: var(--board-dim); }
+.board-note { margin: 0; padding: 12px 16px; font-size: 0.9375rem; color: var(--board-dim); }
+.board-note + .board-note { padding-top: 0; margin-top: -4px; }
+.board.is-inline { margin: 10px 0 0; max-width: 26rem; }
+.board.is-inline .board-row { padding: 7px 14px; }
+.board.is-inline .led { font-size: 1.625rem; }
+.board.is-inline .board-note { padding: 10px 14px; }
+
+/* ---- 길찾기 결과: 노선도처럼 세로로 잇는 구간 ---- */
+.route-title { margin: 28px 0 4px; font-size: 1.25rem; line-height: 1.35; }
+.route-title:focus { outline: none; }
+.route-kinds { margin: 0; font-size: 0.875rem; color: var(--muted); }
+.totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 14px 0 0; padding: 0; }
+.totals div { display: flex; align-items: baseline; gap: 6px; }
+.totals dt { font-size: 0.875rem; color: var(--muted); }
+.totals dd { margin: 0; font-size: 1.125rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.rail { list-style: none; margin: 22px 0 0; padding: 0; }
+.step { --rail: var(--edge); position: relative; padding: 0 0 24px 38px; }
+.step::before {
+  content: ""; position: absolute; left: 8px; top: 16px; bottom: -2px; width: 4px; border-radius: 2px;
+  background: var(--rail);
+}
+.step:last-child::before { display: none; }
+.step::after {
+  content: ""; position: absolute; left: 2px; top: 4px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--fog); border: 4px solid var(--rail);
+}
+.step-walk::before { width: 0; background: none; border-left: 4px dotted var(--edge); border-radius: 0; }
+.step-bus { --rail: var(--bus); }
+.step-subway { --rail: var(--line-other); }
+.step-subway.line-inc1 { --rail: var(--line1); }
+.step-subway.line-inc2 { --rail: var(--line2); }
+.step-end::after { background: var(--ink); border-color: var(--ink); border-radius: 3px; }
+.step-title { margin: 0; font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.step-sub { margin: 2px 0 0; }
+.step-meta { margin: 0; font-size: 0.875rem; color: var(--muted); }
+
+.badge {
+  display: inline-block; min-width: 2.6em; padding: 1px 9px; border-radius: 3px;
+  font-size: 0.9375rem; font-weight: 800; text-align: center; line-height: 1.5;
+}
+.badge-bus { background: var(--bus); color: #fff; }
+.badge-line { background: var(--line-other); color: var(--ink); }
+.badge-line.line-inc1 { background: var(--line1); }
+.badge-line.line-inc2 { background: var(--line2); }
+
+/* ---- 버스 위치 목록 ---- */
+.plain-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.plain-list li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.plain-list .strong { font-weight: 700; font-variant-numeric: tabular-nums; }
+.plain-list .dim { color: var(--muted); text-align: right; }
+
+/* ---- 시간표 ---- */
+.days { display: flex; gap: 6px; margin: 0 0 8px; }
+.day {
+  flex: 1; min-width: 0; min-height: 48px; padding: 0;
+  font: inherit; font-weight: 700; color: var(--ink); background: transparent;
+  border: 1.5px solid var(--edge); border-radius: 4px; cursor: pointer; position: relative;
+}
+.day[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.day.is-today::after {
+  content: ""; position: absolute; left: 50%; bottom: 5px; width: 14px; height: 3px; margin-left: -7px;
+  border-radius: 2px; background: currentColor;
+}
+.classes { list-style: none; margin: 16px 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.classes li { display: grid; grid-template-columns: 4.75rem 1fr; column-gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
+.class-time { margin: 0; font-weight: 800; font-size: 1.125rem; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.class-time small { display: block; font-size: 0.875rem; font-weight: 400; color: var(--muted); }
+.class-name { margin: 0; font-weight: 700; font-size: 1.0625rem; }
+.class-room { margin: 0; color: var(--muted); }
+
+/* ---- 넓은 화면: 탭을 위로 ---- */
+@media (min-width: 760px) {
+  body { padding-bottom: 0; }
+  .tabs {
+    position: static; max-width: 680px; margin: 8px auto 0; border-radius: 6px; overflow: hidden;
+  }
+  .tab { flex-direction: row; gap: 8px; min-height: 48px; font-size: 0.9375rem; border-top: 0; border-bottom: 3px solid transparent; }
+  .tab[aria-selected="true"] { border-bottom-color: var(--led); }
+  main { padding-top: 12px; }
+}
+
+@media (max-width: 380px) {
+  .board-row { grid-template-columns: 5.5rem 1fr; }
+  .led { font-size: 1.75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
