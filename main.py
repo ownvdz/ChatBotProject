@@ -72,6 +72,7 @@ DEFAULT_ROUTE_ID = _env("BUS_ROUTE_ID", "ICB365000073")
 # 0 이하로 두면 해당 제한을 끈다.
 RATE_LIMIT_PER_MIN = _env_int("RATE_LIMIT_PER_MIN", 40)             # /api 전체, IP당 1분
 ROUTE_RATE_LIMIT_PER_MIN = _env_int("ROUTE_RATE_LIMIT_PER_MIN", 10)  # /api/route(ODsay 쿼터 보호), IP당 1분
+GEOCODE_RATE_LIMIT_PER_MIN = _env_int("GEOCODE_RATE_LIMIT_PER_MIN", 20)  # /api/geocode/reverse, IP당 1분
 
 if not TAGO_API_KEY:
     log.warning("PUBLIC_TAGO_API_KEY 가 없습니다. 버스/지하철 API는 503을 반환합니다.")
@@ -318,6 +319,7 @@ def client_ip(request: Request) -> str:
 
 general_limiter = RateLimiter(RATE_LIMIT_PER_MIN)
 route_limiter = RateLimiter(ROUTE_RATE_LIMIT_PER_MIN)
+geocode_limiter = RateLimiter(GEOCODE_RATE_LIMIT_PER_MIN)
 
 
 def _limit_dependency(limiter: RateLimiter):
@@ -583,6 +585,64 @@ def resolve_place(name: str) -> Dict[str, Any]:
         "x": xy[0],
         "y": xy[1],
     }
+
+
+# =============================================================================
+# 역지오코딩: 좌표(현재 위치) → 사람이 읽을 주소
+# =============================================================================
+# ODsay/TAGO 는 이름→좌표 검색만 되고 좌표→주소 변환이 없어서, "현재 위치" 버튼을 눌렀을 때
+# 정확히 어디로 인식됐는지 보여주기 위해 OpenStreetMap Nominatim(무료, 키 불필요)을 쓴다.
+# Nominatim 사용 정책(https://operations.osmfoundation.org/policies/nominatim/)을 지키기 위해:
+#  - 브라우저를 흉내내지 않는 전용 User-Agent를 보낸다 (공용 세션의 브라우저 UA와는 다른 세션을 쓴다).
+#  - 서버 전체에서 초당 1건으로 제한한다 (사용자별이 아니라 프로세스 전체 기준 — 정책이 그렇게 요구함).
+#  - 결과는 캐시해서 같은 좌표를 반복 조회하지 않는다.
+NOMINATIM_HOST = "https://nominatim.openstreetmap.org"
+NOMINATIM_CONTACT = _env("NOMINATIM_CONTACT")  # 선택: 문제 시 연락받을 이메일/URL (User-Agent에 포함)
+_geocode_cache = TTLCache(300)
+_nominatim_lock = threading.Lock()
+_nominatim_last_call = 0.0
+
+
+def _nominatim_headers() -> Dict[str, str]:
+    contact = " ({})".format(NOMINATIM_CONTACT) if NOMINATIM_CONTACT else ""
+    return {"User-Agent": "IncheonTransitWeb/1.0{}".format(contact), "Accept-Language": "ko"}
+
+
+def reverse_geocode(lon: float, lat: float) -> str:
+    """좌표 → 주소 문자열. 초당 1건 제한을 지키며 직접 요청 (공용 세션/헤더를 쓰지 않는다)."""
+    global _nominatim_last_call
+    key = (round(lon, 4), round(lat, 4))
+
+    def load() -> str:
+        global _nominatim_last_call
+        with _nominatim_lock:
+            wait = 1.0 - (time.monotonic() - _nominatim_last_call)
+            if wait > 0:
+                time.sleep(wait)
+            try:
+                resp = requests.get(
+                    "{}/reverse".format(NOMINATIM_HOST),
+                    params={"format": "jsonv2", "lat": lat, "lon": lon, "zoom": 18, "accept-language": "ko"},
+                    headers=_nominatim_headers(), timeout=HTTP_TIMEOUT,
+                )
+            except requests.RequestException as exc:
+                log.warning("Nominatim 네트워크 오류: %s", _redact(exc))
+                raise ApiError("현재 위치의 주소를 확인하지 못했어요.", 502, "geocode_error") from None
+            finally:
+                _nominatim_last_call = time.monotonic()
+        if resp.status_code != 200:
+            log.warning("Nominatim HTTP %s", resp.status_code)
+            raise ApiError("현재 위치의 주소를 확인하지 못했어요.", 502, "geocode_error")
+        try:
+            data = resp.json()
+        except ValueError:
+            raise ApiError("현재 위치의 주소를 확인하지 못했어요.", 502, "geocode_error")
+        address = (data or {}).get("display_name")
+        if not address:
+            raise ApiError("이 위치의 주소를 찾지 못했어요.", 404, "geocode_no_result")
+        return address
+
+    return cached(_geocode_cache, key, 600, load)
 
 
 # =============================================================================
@@ -1452,6 +1512,17 @@ def api_route(
     elif not start:
         raise ApiError("출발지를 입력해 주세요.", 422, "invalid_request")
     return route_overview(start, goal, start_x, start_y)
+
+
+@api.get("/geocode/reverse", dependencies=[Depends(_limit_dependency(geocode_limiter))])
+def api_geocode_reverse(
+    x: float = Query(..., description="경도 (현재 위치)"),
+    y: float = Query(..., description="위도 (현재 위치)"),
+):
+    """좌표 → 주소. '현재 위치' 버튼을 눌렀을 때 실제로 어디로 인식됐는지 보여주기 위한 용도."""
+    if not (124.0 <= x <= 132.0 and 33.0 <= y <= 39.0):
+        raise ApiError("좌표가 대한민국 범위를 벗어났어요. (x=경도, y=위도)", 422, "invalid_request")
+    return {"address": reverse_geocode(x, y)}
 
 
 app.include_router(api)

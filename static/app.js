@@ -215,12 +215,24 @@
     button.disabled = true;
     setLocateStatus('위치를 확인하는 중이에요…');
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        routeState.coords = { x: pos.coords.longitude, y: pos.coords.latitude };
+      async (pos) => {
+        const coords = { x: pos.coords.longitude, y: pos.coords.latitude };
+        routeState.coords = coords;
         startInput.value = '현재 위치';
         $('#btn-swap').disabled = true;
-        setLocateStatus('현재 위치를 출발지로 쓸게요. 이름을 다시 입력하면 해제돼요.');
+        setLocateStatus('주소를 확인하는 중이에요…');
         button.disabled = false;
+
+        const signal = begin('geocode');
+        try {
+          const data = await api('/api/geocode/reverse', { x: coords.x.toFixed(6), y: coords.y.toFixed(6) }, signal);
+          // 그 사이 위치를 다시 눌렀거나 좌표를 지웠으면 옛 결과는 반영하지 않는다.
+          if (routeState.coords === coords) setLocateStatus('현재 위치: ' + data.address);
+        } catch (err) {
+          if (!isAbort(err) && routeState.coords === coords) {
+            setLocateStatus('현재 위치는 확인했지만 정확한 주소는 찾지 못했어요. 출발지로는 그대로 쓸 수 있어요.');
+          }
+        }
       },
       (err) => {
         const text = err.code === 1
