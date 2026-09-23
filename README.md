@@ -2,8 +2,7 @@ https://ownvdz.github.io/ChatBotProject/
 
 # 통학길 — 대중교통·학사 웹 서비스
 
-디스코드 봇(`main.py`)을 FastAPI 웹 서비스로 전환한 버전이다. 첨부해주신 기존 `main.py`는 그대로
-백업 폴더에 보관하면 되고, 여기 있는 `main.py`가 정제된 새 버전이다.
+디스코드 봇(`main.py`)을 FastAPI 웹 서비스로 전환한 버전이다.
 
 ## 1. 기존 코드 정리 내역
 
