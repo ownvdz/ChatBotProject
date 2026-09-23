@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>프로젝트 진행 상황 - 웹 서비스 전환 및 /길찾기 로직 발표</title>
+    <title>프로젝트 진행 상황 - 웹 서비스 전환 및 길찾기 핵심 로직</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -28,10 +28,9 @@
         </div>
     </header>
 
-    <!-- Main Presentation Content -->
-    <main class="max-w-6xl mx-auto px-8 py-12 space-y-48">
+    <main class="max-w-7xl mx-auto px-8 py-12 space-y-48">
 
-        <!-- Cover / Banner Section -->
+        <!-- Cover -->
         <section class="min-h-[75vh] flex flex-col justify-center">
             <div class="rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/30 p-12 md:p-16 relative overflow-hidden shadow-2xl">
                 <div class="absolute -right-12 -bottom-12 opacity-10 text-indigo-400 text-[14rem] pointer-events-none">
@@ -41,330 +40,304 @@
                     <div class="flex flex-wrap gap-3">
                         <span class="px-4 py-1.5 rounded-md text-sm uppercase tracking-widest text-indigo-300 font-bold bg-indigo-500/20 border border-indigo-500/30">Project Progress Overview</span>
                         <span class="px-4 py-1.5 rounded-md text-sm font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-1.5">
-                            <i class="fa-solid fa-location-arrow"></i> GPS-Based Web Migration
+                            <i class="fa-solid fa-location-arrow"></i> Discord Bot → Web Service
                         </span>
                     </div>
                     <h2 class="text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
                         <span class="text-indigo-400">프로젝트 진행 상황</span> 및<br>
-                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">웹 서비스 전환 & /길찾기 핵심 로직</span>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">웹 서비스 전환 & 길찾기 핵심 로직</span>
                     </h2>
                     <p class="text-slate-300 text-lg leading-relaxed pt-2">
-                        디스코드 봇의 위치 수집 한계를 극복하기 위한 웹 서비스 전환 과정과, ODsay 및 국토교통부(TAGO) 실시간 공공 API 교차 매칭 기술 현황을 정리한 발표 자료입니다.
+                        ODsay(경로 탐색)와 국토교통부(TAGO) 공공 API(실시간 수집 데이터)를 결합한 길찾기 기능과, 디스코드 봇 환경의 한계를 극복하기 위해 진행한 웹 서비스 전환 과정을 정리한 발표 자료입니다.
                     </p>
                 </div>
             </div>
         </section>
 
-        <!-- Section 1: 프로젝트 진행 상황 & 웹 전환 배경 -->
+        <!-- Section 1: ODsay + TAGO 결합 이유 -->
         <section class="min-h-[75vh] flex flex-col justify-center space-y-10">
             <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
                 <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-3xl font-bold text-white">1. 프로젝트 진행 상황 & 웹 전환 배경</h3>
+                <h3 class="text-3xl font-bold text-white">1. 길찾기 기능의 핵심 — 서로 다른 API의 결합</h3>
             </div>
 
-            <!-- 핵심 전환 이유 (현재 위치 수신) 강조 카드 -->
             <div class="p-8 md:p-10 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
-                        <i class="fa-solid fa-crosshairs"></i> 웹 서비스 전환 핵심 계기 (Key Driver)
-                    </span>
-                    <span class="text-xs px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">Browser Geolocation</span>
-                </div>
-                <h4 class="text-2xl font-bold text-white">"사용자의 실시간 현재 위치 수집 한계 극복"</h4>
+                <span class="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                    <i class="fa-solid fa-puzzle-piece"></i> 왜 두 API를 함께 쓰는가
+                </span>
+                <h4 class="text-2xl font-bold text-white">"실시간 수집은 강하지만, 경로 탐색은 할 수 없는 공공 API"</h4>
                 <p class="text-slate-300 leading-relaxed text-base">
-                    길찾기 서비스의 핵심은 <b>'사용자의 현재 위치를 출발지로 바로 자동 설정'</b>하는 편리함에 있습니다. 그러나 디스코드 봇 환경에서는 모바일/PC 사용자의 실시간 GPS 좌표를 수신하는 기능이 제한되어 있어 매번 정류장명이나 주소를 텍스트로 직접 입력해야 하는 큰 불편함이 존재했습니다.<br><br>
-                    이를 해결하기 위해 <b>웹 브라우저의 Geolocation API</b>를 활용하여 원클릭으로 현재 위치를 자동 파악하고 즉시 경로를 탐색할 수 있는 <b>웹 서비스 환경으로 전환</b>을 추진하게 되었습니다.
+                    국토교통부(TAGO) 공공 API는 버스 도착 예정 시간, 버스 실시간 위치, 지하철 고정 시간표 등 <b>현장 데이터를 수집·제공</b>하는 데는 훌륭하지만, "출발지에서 도착지까지 어떤 노선을 타고 어디서 환승해야 하는지" 계산해주는 <b>경로 탐색(길찾기) 기능 자체가 없습니다.</b><br><br>
+                    그래서 경로 탐색에 특화된 <b>ODsay API</b>로 최적 대중교통 경로(환승 순서·소요시간·요금)를 먼저 계산하고, 그 경로의 각 구간(버스/지하철)에 <b>TAGO의 실시간 데이터를 매칭</b>해 덧붙이는 방식으로 두 API를 결합했습니다.
                 </p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- 문제점 카드 -->
                 <div class="p-8 rounded-2xl bg-rose-950/20 border border-rose-500/20 space-y-4">
                     <div class="flex items-center justify-between">
-                        <span class="text-sm font-bold uppercase tracking-wider text-rose-400">단일 API 한계 (Problem)</span>
+                        <span class="text-sm font-bold uppercase tracking-wider text-rose-400">TAGO 단독 사용 시 한계</span>
                         <i class="fa-solid fa-triangle-exclamation text-rose-400 text-2xl"></i>
                     </div>
-                    <h4 class="text-xl font-bold text-slate-100">경로 엔진과 실시간 데이터의 불일치</h4>
+                    <h4 class="text-xl font-bold text-slate-100">경로 계산 기능 부재</h4>
                     <p class="text-sm text-slate-300 leading-relaxed">
-                        경로 탐색 전문 API(ODsay)는 최적 경로 수립은 뛰어난 반면, 특정 버스 노선이나 지하철의 <b>실시간 남은 시간 데이터 정확도가 저하</b>되는 한계가 존재함.
+                        정류장/역 단위 실시간 정보는 정확하지만, "어디서 타고 몇 번 환승해야 하는지"를 계산해주는 경로 탐색 엔진이 없어 길찾기 서비스로는 사용할 수 없음.
                     </p>
                 </div>
-
-                <!-- 해결책 카드 -->
                 <div class="p-8 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 space-y-4">
                     <div class="flex items-center justify-between">
-                        <span class="text-sm font-bold uppercase tracking-wider text-emerald-400">하이브리드 해결책 (Solution)</span>
+                        <span class="text-sm font-bold uppercase tracking-wider text-emerald-400">ODsay + TAGO 결합</span>
                         <i class="fa-solid fa-diagram-project text-emerald-400 text-2xl"></i>
                     </div>
-                    <h4 class="text-xl font-bold text-slate-100">ODsay + TAGO 공공 API 교차 매칭</h4>
+                    <h4 class="text-xl font-bold text-slate-100">최적 경로 + 정확한 실시간 정보</h4>
                     <p class="text-sm text-slate-300 leading-relaxed">
-                        ODsay의 경로 검색 능력과 <b>국토교통부(TAGO) 실시간 수집 데이터</b>를 결합하여 "최적의 환승 경로 + 정확한 실시간 남은 시간"을 동시 제공.
+                        ODsay의 경로 탐색 능력으로 "최적 환승 경로"를, TAGO 실시간 데이터로 "지금 몇 분 후 도착하는지"를 동시에 제공.
                     </p>
                 </div>
             </div>
         </section>
 
-        <!-- Section 2: 전체 작동 프로세스 (디자인 통일 완료) -->
-        <section class="min-h-[75vh] flex flex-col justify-center space-y-10">
+        <!-- Section 2: 작동 프로세스 (Flow) -->
+        <section class="min-h-[75vh] flex flex-col justify-center space-y-14">
             <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
                 <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-3xl font-bold text-white">2. 전체 작동 프로세스 (4-Step Workflow)</h3>
+                <h3 class="text-3xl font-bold text-white">2. 길찾기 작동 로직</h3>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="flex flex-col lg:flex-row items-stretch gap-3">
                 <!-- Step 1 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">01</div>
-                    <h4 class="font-bold text-white text-lg">좌표 변환 & 위치 획득</h4>
-                    <p class="text-xs font-mono text-indigo-400">Geolocation / Station Coords</p>
-                    <p class="text-sm text-slate-300 leading-relaxed">
-                        웹 브라우저 GPS 좌표 또는 검색 텍스트를 ODsay `searchStation` API로 WGS84 좌표(X, Y) 변환
-                    </p>
+                <div class="flex-1 p-8 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col items-center text-center gap-3">
+                    <span class="text-xs font-bold tracking-widest text-slate-500">STEP 1</span>
+                    <div class="w-16 h-16 rounded-2xl bg-slate-800 text-slate-300 flex items-center justify-center text-2xl">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white">위치 확정</h4>
+                    <p class="text-sm text-slate-400 leading-relaxed">이름 검색 또는 GPS 좌표로<br>출발·도착지를 동시에 확정</p>
                 </div>
+
+                <div class="hidden lg:flex items-center justify-center text-slate-700 text-2xl px-1"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="flex lg:hidden items-center justify-center text-slate-700 text-2xl py-1"><i class="fa-solid fa-chevron-down"></i></div>
 
                 <!-- Step 2 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">02</div>
-                    <h4 class="font-bold text-white text-lg">최적 경로 탐색</h4>
-                    <p class="text-xs font-mono text-indigo-400">odsay_search_path()</p>
-                    <p class="text-sm text-slate-300 leading-relaxed">
-                        ODsay `searchPubTransPathT` API로 소요시간, 요금, 환승 횟수 및 세부 경로 구간(`subPath`) 추출
-                    </p>
+                <div class="flex-1 p-8 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col items-center text-center gap-3">
+                    <span class="text-xs font-bold tracking-widest text-slate-500">STEP 2</span>
+                    <div class="w-16 h-16 rounded-2xl bg-slate-800 text-slate-300 flex items-center justify-center text-2xl">
+                        <i class="fa-solid fa-route"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white">경로 탐색</h4>
+                    <p class="text-sm text-slate-400 leading-relaxed">ODsay가 최적 경로의<br>환승 구간(도보·버스·지하철)을 계산</p>
                 </div>
 
-                <!-- Step 3 (디자인 통일 완료) -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">03</div>
-                    <h4 class="font-bold text-white text-lg">실시간 데이터 결합</h4>
-                    <p class="text-xs font-mono text-indigo-400">TAGO API Cross-Match</p>
-                    <p class="text-sm text-slate-300 leading-relaxed">
-                        구간별 매칭 수행. 버스 실시간 도착 정보 및 지하철 운행 시간표 연동 계산
-                    </p>
+                <div class="hidden lg:flex items-center justify-center text-slate-700 text-2xl px-1"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="flex lg:hidden items-center justify-center text-slate-700 text-2xl py-1"><i class="fa-solid fa-chevron-down"></i></div>
+
+                <!-- Step 3: 핵심 단계 강조 -->
+                <div class="flex-[1.3] p-8 rounded-2xl bg-indigo-950/40 border-2 border-indigo-500/50 flex flex-col items-center text-center gap-3 shadow-lg shadow-indigo-500/10 relative">
+                    <span class="absolute -top-3 px-3 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500 text-white">CORE</span>
+                    <span class="text-xs font-bold tracking-widest text-indigo-300">STEP 3</span>
+                    <div class="w-16 h-16 rounded-2xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-2xl border border-indigo-500/30">
+                        <i class="fa-solid fa-satellite-dish"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white">실시간 교차 매칭</h4>
+                    <p class="text-sm text-indigo-200/80 leading-relaxed">구간마다 TAGO 실시간 데이터를<br>병렬로 매칭 (12초 내 응답 없으면 요약만 유지)</p>
                 </div>
+
+                <div class="hidden lg:flex items-center justify-center text-slate-700 text-2xl px-1"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="flex lg:hidden items-center justify-center text-slate-700 text-2xl py-1"><i class="fa-solid fa-chevron-down"></i></div>
 
                 <!-- Step 4 -->
-                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold text-base">04</div>
-                    <h4 class="font-bold text-white text-lg">웹 UI 동적 렌더링</h4>
-                    <p class="text-xs font-mono text-indigo-400">JSON Response & Web UI</p>
-                    <p class="text-sm text-slate-300 leading-relaxed">
-                        백엔드 API에서 가공된 구조화 JSON 데이터를 받아 웹 프론트엔드에서 직관적인 UI로 출력
-                    </p>
+                <div class="flex-1 p-8 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col items-center text-center gap-3">
+                    <span class="text-xs font-bold tracking-widest text-slate-500">STEP 4</span>
+                    <div class="w-16 h-16 rounded-2xl bg-slate-800 text-slate-300 flex items-center justify-center text-2xl">
+                        <i class="fa-solid fa-display"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-white">화면 출력</h4>
+                    <p class="text-sm text-slate-400 leading-relaxed">구조화된 JSON을 반환하면<br>프론트엔드가 보기 좋게 렌더링</p>
                 </div>
             </div>
         </section>
 
-        <!-- Section 3: 이동 수단별 상세 처리 알고리즘 -->
+        <!-- Section 3: 구간별 매칭 로직 (Comparison) -->
         <section class="min-h-[75vh] flex flex-col justify-center space-y-10">
             <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
                 <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-3xl font-bold text-white">3. 구간별 세부 데이터 결합 로직</h3>
+                <h3 class="text-3xl font-bold text-white">3. 구간별 세부 매칭 로직</h3>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <!-- 도보 -->
-                <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-5">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center text-2xl">
-                            <i class="fa-solid fa-person-walking"></i>
+            <!-- 도보: 가볍게 한 줄로 -->
+            <div class="flex items-center gap-4 px-6 py-4 rounded-xl bg-slate-900/60 border border-slate-800/80 text-sm text-slate-400">
+                <i class="fa-solid fa-person-walking text-lg text-slate-500"></i>
+                <span><b class="text-slate-300">도보 구간</b> — 별도 매칭 없이 이동 거리·소요 시간만 요약 표기 (0m 구간은 생략)</span>
+            </div>
+
+            <!-- 버스 vs 지하철: 핵심 비교 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="rounded-2xl bg-blue-950/20 border border-blue-500/20 overflow-hidden">
+                    <div class="flex items-center gap-3 px-6 py-4 border-b border-blue-500/20 bg-blue-500/10">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center text-lg"><i class="fa-solid fa-bus"></i></div>
+                        <h4 class="text-lg font-bold text-white">버스 구간 매칭</h4>
+                    </div>
+                    <div class="p-6 space-y-4 text-sm text-slate-300 leading-relaxed">
+                        <div class="flex items-center gap-3">
+                            <span class="shrink-0 w-24 text-center text-xs font-bold px-2 py-1 rounded-md bg-blue-500/10 text-blue-300">좌표 매칭</span>
+                            <span>반경 <b class="text-white">150m / 60m</b> 안 정류소 탐색</span>
                         </div>
-                        <div>
-                            <h4 class="text-xl font-bold text-white">🚶 도보 구간</h4>
-                            <span class="text-xs font-mono text-slate-400">trafficType == 3</span>
+                        <div class="flex items-center gap-3">
+                            <span class="shrink-0 w-24 text-center text-xs font-bold px-2 py-1 rounded-md bg-blue-500/10 text-blue-300">방향 검증</span>
+                            <span>정류소 순번 <code class="text-xs bg-slate-800 px-1 py-0.5 rounded">nodeord</code>로 진행 방향까지 확인</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="shrink-0 w-24 text-center text-xs font-bold px-2 py-1 rounded-md bg-blue-500/10 text-blue-300">결과 출력</span>
+                            <span>도착 예정(분) · 남은 정류장 수 표기</span>
                         </div>
                     </div>
-                    <ul class="space-y-3 text-sm text-slate-300 leading-relaxed">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-indigo-400 mt-1"></i>
-                            <span>이동 거리(m) 단위를 가독성 높게 파싱</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-indigo-400 mt-1"></i>
-                            <span>구간별 예상 소요 시간 요약 표기</span>
-                        </li>
-                    </ul>
                 </div>
 
-                <!-- 버스 -->
-                <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-5">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-2xl">
-                            <i class="fa-solid fa-bus"></i>
+                <div class="rounded-2xl bg-emerald-950/20 border border-emerald-500/20 overflow-hidden">
+                    <div class="flex items-center gap-3 px-6 py-4 border-b border-emerald-500/20 bg-emerald-500/10">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-lg"><i class="fa-solid fa-train-subway"></i></div>
+                        <h4 class="text-lg font-bold text-white">지하철 구간 매칭</h4>
+                    </div>
+                    <div class="p-6 space-y-4 text-sm text-slate-300 leading-relaxed">
+                        <div class="flex items-center gap-3">
+                            <span class="shrink-0 w-24 text-center text-xs font-bold px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-300">시간표 조회</span>
+                            <span>요일별(평일/토/일) 고정 시간표에서 다음 열차 계산</span>
                         </div>
-                        <div>
-                            <h4 class="text-xl font-bold text-white">🚌 버스 구간</h4>
-                            <span class="text-xs font-mono text-blue-400">trafficType == 2</span>
+                        <div class="flex items-center gap-3">
+                            <span class="shrink-0 w-24 text-center text-xs font-bold px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-300">방향 검증</span>
+                            <span>ODsay <code class="text-xs bg-slate-800 px-1 py-0.5 rounded">way</code> ↔ 열차 종점역명 비교</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="shrink-0 w-24 text-center text-xs font-bold px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-300">결과 출력</span>
+                            <span>다음 열차 시각(HH:MM) · 남은 시간 표기</span>
                         </div>
                     </div>
-                    <ul class="space-y-3 text-sm text-slate-300 leading-relaxed">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-blue-400 mt-1"></i>
-                            <span><b>TAGO 노선 ID 조회:</b> 버스 번호 기반 TAGO <code class="text-xs bg-slate-800 px-1 py-0.5 rounded">route_id</code> 검색</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-blue-400 mt-1"></i>
-                            <span><b>GPS 정류장 매칭:</b> 반경 150m/60m 좌표 비교 및 정류장 순번(<code class="text-xs bg-slate-800 px-1 py-0.5 rounded">nodeord</code>) 검증으로 진행방향 선별</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-blue-400 mt-1"></i>
-                            <span><b>실시간 정보 출력:</b> 도착 예정 분(min) 및 남은 정류장 수 표기</span>
-                        </li>
-                    </ul>
                 </div>
+            </div>
 
-                <!-- 지하철 -->
-                <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-5">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-2xl">
-                            <i class="fa-solid fa-train-subway"></i>
-                        </div>
-                        <div>
-                            <h4 class="text-xl font-bold text-white">🚇 지하철 구간</h4>
-                            <span class="text-xs font-mono text-emerald-400">trafficType == 1</span>
-                        </div>
-                    </div>
-                    <ul class="space-y-3 text-sm text-slate-300 leading-relaxed">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
-                            <span><b>시간표 연동:</b> 요일별(평일/토/일) 고정 시간표 파싱 및 현재 시각 기준 계산</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
-                            <span><b>진행 방면 추정:</b> ODsay의 <code class="text-xs bg-slate-800 px-1 py-0.5 rounded">way</code> 정보와 종점역명을 비교하여 도착 열차 매칭</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
-                            <span><b>출발 시각 안내:</b> 가장 가까운 다음 열차 시각(HH:MM) 및 남은 시간 표기</span>
-                        </li>
-                    </ul>
+            <!-- 안정성 보완: 한 줄 pill 3개 -->
+            <div class="flex flex-wrap gap-3">
+                <div class="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 border border-slate-800 text-sm text-slate-300">
+                    <i class="fa-solid fa-bolt text-indigo-400"></i> 캐싱 — 노선 정보 24h / 도착 정보 15s
+                </div>
+                <div class="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 border border-slate-800 text-sm text-slate-300">
+                    <i class="fa-solid fa-shield-halved text-indigo-400"></i> Fallback — 주말 데이터 공백 시 평일 시간표 대체
+                </div>
+                <div class="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 border border-slate-800 text-sm text-slate-300">
+                    <i class="fa-solid fa-circle-check text-indigo-400"></i> 부분 실패 허용 — 경로 요약은 항상 응답에 포함
                 </div>
             </div>
         </section>
 
-        <!-- Section 4: 기술적 핵심 해결 포인트 -->
+        <!-- Section 4: 현재 위치 한계 -->
         <section class="min-h-[75vh] flex flex-col justify-center space-y-10">
             <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
                 <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-3xl font-bold text-white">4. 기술적 핵심 해결 포인트 (Highlights)</h3>
+                <h3 class="text-3xl font-bold text-white">4. "현재 위치" 출발지 설정과 디스코드 봇의 한계</h3>
             </div>
 
-            <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
-                    <!-- 해결점 1 -->
-                    <div class="p-6 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
-                        <div class="flex items-center gap-2 text-indigo-400 font-bold text-base">
-                            <i class="fa-solid fa-link"></i>
-                            <span>이종 API 불일치 해결</span>
-                        </div>
-                        <p class="text-slate-300 leading-relaxed">
-                            정류장 이름 + GPS 좌표 하버사인(Haversine) 거리 계산 + 노선 정류장 순번 교차 검증 알고리즘으로 ODsay-TAGO간 ID 불일치 완벽 해소
-                        </p>
-                    </div>
-
-                    <!-- 해결점 2 -->
-                    <div class="p-6 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
-                        <div class="flex items-center gap-2 text-indigo-400 font-bold text-base">
-                            <i class="fa-solid fa-bolt"></i>
-                            <span>캐싱을 통한 응답 속도 향상</span>
-                        </div>
-                        <p class="text-slate-300 leading-relaxed">
-                            변동성이 적은 버스 노선 정류장 데이터(24시간 TTL) 및 실시간 도착 정보(15초 TTL) 메모리 캐싱으로 API 호출 트래픽 절감
-                        </p>
-                    </div>
-
-                    <!-- 해결점 3 -->
-                    <div class="p-6 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
-                        <div class="flex items-center gap-2 text-indigo-400 font-bold text-base">
-                            <i class="fa-solid fa-shield-halved"></i>
-                            <span>예외 처리 및 Fallback 시스템</span>
-                        </div>
-                        <p class="text-slate-300 leading-relaxed">
-                            주말 지하철 운행 데이터 공백 발생 시, 자동으로 평일 시간표 데이터 기반 안내 문구로 우회 출력하는 데이터 안정화 탑재
-                        </p>
-                    </div>
-                </div>
+            <div class="p-8 md:p-10 rounded-2xl bg-rose-950/20 border border-rose-500/20 space-y-4">
+                <span class="text-sm font-bold uppercase tracking-wider text-rose-400 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> 시도했지만 막힌 지점
+                </span>
+                <h4 class="text-2xl font-bold text-white">"디스코드 봇은 사용자의 실시간 GPS를 받을 수 없다"</h4>
+                <p class="text-slate-300 leading-relaxed text-base">
+                    길찾기의 편의성을 높이기 위해 <b>현재 위치를 출발지로 자동 설정</b>하는 기능을 추가하려 했지만, 디스코드 봇이라는 플랫폼 자체가 모바일/PC 사용자의 실시간 위치 좌표를 수신할 수단을 제공하지 않아 매번 정류장명이나 주소를 텍스트로 입력해야 하는 한계가 있었습니다.
+                </p>
             </div>
         </section>
 
-        <!-- Section 5: 스크립트 대체 -> 플랫폼 전환 비교 및 향후 계획 -->
-        <section class="min-h-[75vh] flex flex-col justify-center space-y-10 pb-16">
+        <!-- Section 5: 웹 서비스 추가 -->
+        <section class="min-h-[75vh] flex flex-col justify-center space-y-10">
             <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
                 <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
-                <h3 class="text-3xl font-bold text-white">5. 디스코드 봇 vs 웹 서비스 비교 및 향후 계획</h3>
+                <h3 class="text-3xl font-bold text-white">5. 해결책 — 디스코드 봇 유지 + 웹 서비스 추가</h3>
             </div>
 
-            <!-- 전환 비교 표/카드 -->
+            <p class="text-slate-300 leading-relaxed text-base">
+                디스코드 챗봇은 그대로 운영하면서, 별도로 <b>웹 서비스</b>를 추가했습니다. 기존 봇의 API 호출·매칭 로직 코드를 대부분 그대로 재사용하고, 인터페이스만 웹에 맞게 분리했습니다.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-server text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">백엔드</h4>
+                    <p class="text-sm text-slate-300">FastAPI로 전환. 기존 로직 함수를 그대로 두고, /api/* 엔드포인트가 결과를 JSON으로 반환</p>
+                </div>
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-display text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">프론트엔드</h4>
+                    <p class="text-sm text-slate-300">HTML, CSS, JS로 구현. 브라우저 Geolocation API로 좌표를 받아 그대로 API에 전달</p>
+                </div>
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-cloud text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">서버 / 도메인</h4>
+                    <p class="text-sm text-slate-300">Oracle Cloud 서버에 배포, DuckDNS로 도메인 발급</p>
+                </div>
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-lock text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">인증서</h4>
+                    <p class="text-sm text-slate-300">Caddy로 HTTPS 인증서 자동 발급 및 갱신</p>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- 디스코드 봇 -->
                 <div class="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
                     <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <span class="font-bold text-slate-400">기존 (디스코드 봇)</span>
+                        <span class="font-bold text-slate-400">디스코드 봇 (유지)</span>
                         <i class="fa-brands fa-discord text-2xl text-slate-500"></i>
                     </div>
                     <ul class="space-y-3 text-sm text-slate-300">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-xmark text-rose-400 mt-1"></i>
-                            <span><b>출발지 설정:</b> 사용자 현재 GPS 수신 불가 (텍스트 직접 입력 필수)</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-xmark text-rose-400 mt-1"></i>
-                            <span><b>접근성:</b> 디스코드 앱 설치 및 서버 입장 필요</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-xmark text-rose-400 mt-1"></i>
-                            <span><b>UI 표현력:</b> 단순 Embed 메시지 형태에 국한</span>
-                        </li>
+                        <li class="flex items-start gap-2"><i class="fa-solid fa-xmark text-rose-400 mt-1"></i><span>현재 GPS 수신 불가 → 정류장명 직접 입력 필요</span></li>
+                        <li class="flex items-start gap-2"><i class="fa-solid fa-check text-emerald-400 mt-1"></i><span>기존 사용자는 디스코드에서 그대로 이용 가능</span></li>
                     </ul>
                 </div>
-
-                <!-- 웹 서비스 -->
                 <div class="p-8 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 space-y-4">
                     <div class="flex items-center justify-between border-b border-indigo-500/30 pb-3">
-                        <span class="font-bold text-indigo-300">개선 (웹 서비스 전환 후)</span>
+                        <span class="font-bold text-indigo-300">웹 서비스 (신규 추가)</span>
                         <i class="fa-solid fa-globe text-2xl text-indigo-400"></i>
                     </div>
                     <ul class="space-y-3 text-sm text-slate-200">
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
-                            <span><b>출발지 설정:</b> 클릭 한 번으로 Browser Geolocation GPS 수신</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
-                            <span><b>접근성:</b> 별도 설치 없이 URL 접속만으로 바로 이용</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fa-solid fa-check text-emerald-400 mt-1"></i>
-                            <span><b>UI 표현력:</b> 동적 컴포넌트, 모바일 최적화 웹 UI</span>
-                        </li>
+                        <li class="flex items-start gap-2"><i class="fa-solid fa-check text-emerald-400 mt-1"></i><span>클릭 한 번으로 Browser Geolocation GPS 수신 → 출발지 자동 설정</span></li>
+                        <li class="flex items-start gap-2"><i class="fa-solid fa-check text-emerald-400 mt-1"></i><span>설치 없이 URL 접속만으로 바로 이용</span></li>
                     </ul>
                 </div>
             </div>
+        </section>
 
-            <!-- 향후 계획 -->
-            <div class="p-8 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                <h4 class="text-xl font-bold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-rocket text-indigo-400"></i> 향후 고도화 계획 (Roadmap)
-                </h4>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-sm">
-                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                        <span class="font-bold text-indigo-300 block mb-1">지도 SDK 연동</span>
-                        <p class="text-slate-400 text-xs">카카오/네이버 지도 SDK를 도입하여 경로 선형 시각화 기능 추가</p>
-                    </div>
-                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                        <span class="font-bold text-indigo-300 block mb-1">자주 가는 경로 저장</span>
-                        <p class="text-slate-400 text-xs">사용자별 등하교 자주 이용하는 노선 및 정류장 즐겨찾기 제공</p>
-                    </div>
-                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                        <span class="font-bold text-indigo-300 block mb-1">PWA 앱화</span>
-                        <p class="text-slate-400 text-xs">모바일 홈 화면 추가 및 실시간 대중교통 도착 Push 알림 지원</p>
-                    </div>
+        <!-- Section 6: 향후 계획 -->
+        <section class="min-h-[75vh] flex flex-col justify-center space-y-10 pb-16">
+            <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                <span class="w-4 h-10 bg-indigo-500 rounded-full"></span>
+                <h3 class="text-3xl font-bold text-white">6. 향후 계획 (Roadmap)</h3>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-palette text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">웹 전용 UI 개선</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        봇에서 웹으로 전환하는 과정을 우선했기 때문에, 현재 UI는 아직 웹 환경에 완전히 최적화되지 않음. 웹에 맞는 UI/UX로 개선 예정.
+                    </p>
+                </div>
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-location-crosshairs text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">PC 위치 정확도 개선</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        모바일에서는 현재 위치가 정확히 잡히지만, PC 환경에서는 상대적으로 부정확하게 나오는 문제 확인. 개선 방안 검토 필요.
+                    </p>
+                </div>
+                <div class="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                    <i class="fa-solid fa-database text-indigo-400 text-2xl"></i>
+                    <h4 class="font-bold text-white">CRUD 기능 추가</h4>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        길찾기 기능 및 웹 전환 과정에 예상보다 많은 시간이 소요되어 미뤄졌던 CRUD 기능(시간표 등 데이터 관리)을 추가할 예정.
+                    </p>
                 </div>
             </div>
         </section>
 
     </main>
 
-    <!-- Footer -->
     <footer class="border-t border-slate-800 py-10 text-center text-sm text-slate-500">
         <div class="max-w-6xl mx-auto px-8 space-y-2">
             <p>© 2026 ChatBot Project Team. All rights reserved.</p>
