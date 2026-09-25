@@ -301,22 +301,30 @@
       onPick(place);
     }
 
+    const cache = new Map(); // 같은 검색어를 다시 치면 API를 또 부르지 않는다 (ODsay 일일 쿼터 절약)
     const runSearch = debounce(async (q) => {
+      if (cache.has(q)) {
+        items = cache.get(q);
+        activeIndex = -1;
+        renderList();
+        return;
+      }
       const signal = begin(searchKey);
       try {
         const data = await api('/api/places/search', { q }, signal);
         items = data.results || [];
+        cache.set(q, items);
         activeIndex = -1;
         renderList();
       } catch (err) {
         if (!isAbort(err)) close();
       }
-    }, 300);
+    }, 450);
 
     input.addEventListener('input', () => {
       onTyping();
       const q = input.value.trim();
-      if (q.length < 1) { close(); return; }
+      if (q.length < 2) { close(); return; }
       runSearch(q);
     });
 
