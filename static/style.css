@@ -172,6 +172,20 @@ input[type="text"]::placeholder { color: #7a879b; }
 .route-title { margin: 28px 0 4px; font-size: 1.25rem; line-height: 1.35; }
 .route-title:focus { outline: none; }
 .route-kinds { margin: 0; font-size: 0.875rem; color: var(--muted); }
+.back-btn { margin: 0 0 4px; }
+
+/* ---- 경로 후보 목록 (약식) ---- */
+.route-options { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.route-option {
+  width: 100%; text-align: left; padding: 14px 16px;
+  background: var(--surface); border: 1.5px solid var(--rule); border-radius: 6px; cursor: pointer;
+}
+.route-option:hover, .route-option:focus-visible { border-color: var(--edge); }
+.route-option-lines { margin: 0 0 8px; font-weight: 700; font-size: 1.0625rem; }
+.route-option-stats { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; }
+.route-option-stats div { display: flex; align-items: baseline; gap: 5px; }
+.route-option-stats dt { font-size: 0.8125rem; color: var(--muted); }
+.route-option-stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 14px 0 0; padding: 0; }
 .totals div { display: flex; align-items: baseline; gap: 6px; }
 .totals dt { font-size: 0.875rem; color: var(--muted); }

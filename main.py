@@ -1,5 +1,4 @@
 """
-test
 인하대/인천대 대중교통·학사 통합 서비스 — FastAPI 백엔드
 
 디스코드 봇에서 웹 서비스로 전환한 버전이다.
@@ -1376,9 +1375,9 @@ def _first_lane(sub_path: Dict[str, Any]) -> Dict[str, Any]:
     return lane if isinstance(lane, dict) else {}
 
 
-def route_overview(start: Optional[str], goal: Optional[str], start_x: Optional[float], start_y: Optional[float],
-                   goal_x: Optional[float] = None, goal_y: Optional[float] = None,
-                   goal_name: Optional[str] = None) -> Dict[str, Any]:
+def _resolve_start_goal(start: Optional[str], goal: Optional[str], start_x: Optional[float], start_y: Optional[float],
+                        goal_x: Optional[float] = None, goal_y: Optional[float] = None,
+                        goal_name: Optional[str] = None) -> Tuple[Dict[str, Any], Dict[str, Any], dt.datetime]:
     now = now_kst()
 
     # 1) 출발/도착 확정 (좌표가 있으면 그대로 쓰고, 없으면 이름으로 검색 — 검색은 동시에)
@@ -1400,13 +1399,64 @@ def route_overview(start: Optional[str], goal: Optional[str], start_x: Optional[
                       "x": goal_x, "y": goal_y}
     else:
         goal_place = unwrap(resolved["goal"])
+    return start_place, goal_place, now
 
-    # 2) 경로 탐색: 첫 번째 경로만 사용
+
+MAX_ROUTE_CANDIDATES = 5
+
+
+def _path_lines(path: Dict[str, Any]) -> List[str]:
+    """경로 요약용: 버스/지하철 구간의 노선 이름을 순서대로 (도보는 뺀다)."""
+    out = []
+    for sp in path.get("subPath", []) or []:
+        kind = TRAFFIC_KINDS.get(sp.get("trafficType"))
+        if kind not in ("bus", "subway"):
+            continue
+        lane = _first_lane(sp)
+        out.append(lane.get("busNo") or lane.get("name") or ("버스" if kind == "bus" else "지하철"))
+    return out
+
+
+def _path_summary(path: Dict[str, Any], index: int) -> Dict[str, Any]:
+    info = path.get("info", {}) or {}
+    transit_legs = sum(1 for sp in (path.get("subPath", []) or [])
+                       if TRAFFIC_KINDS.get(sp.get("trafficType")) in ("bus", "subway"))
+    return {
+        "index": index,
+        "total_minutes": _safe_int(info.get("totalTime")),
+        "total_distance_m": _safe_int(info.get("totalDistance")),
+        "fare": _safe_int(info.get("payment")),
+        "transfers": max(transit_legs - 1, 0),
+        "lines": _path_lines(path),
+    }
+
+
+def route_candidates(start: Optional[str], goal: Optional[str], start_x: Optional[float], start_y: Optional[float],
+                     goal_x: Optional[float] = None, goal_y: Optional[float] = None,
+                     goal_name: Optional[str] = None) -> Dict[str, Any]:
+    """경로 후보 약식 목록. TAGO 실시간 조회 없이 ODsay 결과만으로 빠르게 응답한다."""
+    start_place, goal_place, _now = _resolve_start_goal(start, goal, start_x, start_y, goal_x, goal_y, goal_name)
     paths = odsay_search_path(start_place["x"], start_place["y"], goal_place["x"], goal_place["y"])
-    best = paths[0]
+    return {
+        "start": {k: start_place[k] for k in ("query", "name", "kind")},
+        "goal": {k: goal_place[k] for k in ("query", "name", "kind")},
+        "candidates": [_path_summary(p, i) for i, p in enumerate(paths[:MAX_ROUTE_CANDIDATES])],
+    }
+
+
+def route_detail(start: Optional[str], goal: Optional[str], start_x: Optional[float], start_y: Optional[float],
+                 goal_x: Optional[float] = None, goal_y: Optional[float] = None,
+                 goal_name: Optional[str] = None, index: int = 0) -> Dict[str, Any]:
+    """선택한 경로 후보(index)의 세부 구간 + 구간별 실시간. odsay_search_path 는 좌표 기준으로 캐시되므로,
+    같은 출발/도착이면 약식 목록 조회 때와 같은 결과를 재사용한다 (ODsay 재호출 없음)."""
+    start_place, goal_place, now = _resolve_start_goal(start, goal, start_x, start_y, goal_x, goal_y, goal_name)
+    paths = odsay_search_path(start_place["x"], start_place["y"], goal_place["x"], goal_place["y"])
+    if not (0 <= index < len(paths)):
+        raise ApiError("요청한 경로를 찾을 수 없어요. 다시 검색해 주세요.", 404, "path_not_found")
+    best = paths[index]
     info = best.get("info", {}) or {}
 
-    # 3) 구간 요약 (항상 만들어서 돌려준다) + 실시간 조회 대상 수집
+    # 구간 요약 (항상 만들어서 돌려준다) + 실시간 조회 대상 수집
     steps: List[Dict[str, Any]] = []
     legs: Dict[int, Tuple[str, Dict[str, Any]]] = {}
     daily_type = daily_type_code(now)
@@ -1614,16 +1664,9 @@ def api_bus_locations():
     return bus_locations_overview()
 
 
-@api.get("/route", dependencies=[Depends(_limit_dependency(route_limiter))])
-def api_route(
-    goal: Optional[str] = Query(None, max_length=60, description="도착지 이름 (좌표를 주면 표시용 이름)"),
-    start: Optional[str] = Query(None, max_length=40, description="출발 정류장/역 이름 (좌표를 주면 표시용 이름)"),
-    start_x: Optional[float] = Query(None, description="출발지 경도 (선택, 현재 위치용)"),
-    start_y: Optional[float] = Query(None, description="출발지 위도 (선택, 현재 위치용)"),
-    goal_x: Optional[float] = Query(None, description="도착지 경도 (선택, /api/places/search 결과 사용 시)"),
-    goal_y: Optional[float] = Query(None, description="도착지 위도 (선택, /api/places/search 결과 사용 시)"),
-):
-    """ODsay 경로 + 구간별 실시간. 실시간 조회가 실패해도 경로 요약은 항상 내려간다."""
+def _validate_route_query(start: Optional[str], goal: Optional[str], start_x: Optional[float], start_y: Optional[float],
+                          goal_x: Optional[float], goal_y: Optional[float]) -> Tuple[Optional[str], Optional[str]]:
+    """공용 검증: /api/route 와 /api/route/detail 이 같은 규칙을 쓴다. (start, goal) 정리된 값을 돌려준다."""
     goal = (goal or "").strip() or None
     start = (start or "").strip() or None
     if (start_x is None) != (start_y is None):
@@ -1637,7 +1680,37 @@ def api_route(
         raise ApiError("출발지를 입력해 주세요.", 422, "invalid_request")
     if goal_x is None and not goal:
         raise ApiError("도착지를 입력해 주세요.", 422, "invalid_request")
-    return route_overview(start, goal, start_x, start_y, goal_x, goal_y, goal_name=goal)
+    return start, goal
+
+
+@api.get("/route", dependencies=[Depends(_limit_dependency(route_limiter))])
+def api_route(
+    goal: Optional[str] = Query(None, max_length=60, description="도착지 이름 (좌표를 주면 표시용 이름)"),
+    start: Optional[str] = Query(None, max_length=40, description="출발 정류장/역 이름 (좌표를 주면 표시용 이름)"),
+    start_x: Optional[float] = Query(None, description="출발지 경도 (선택, 현재 위치용)"),
+    start_y: Optional[float] = Query(None, description="출발지 위도 (선택, 현재 위치용)"),
+    goal_x: Optional[float] = Query(None, description="도착지 경도 (선택, /api/places/search 결과 사용 시)"),
+    goal_y: Optional[float] = Query(None, description="도착지 위도 (선택, /api/places/search 결과 사용 시)"),
+):
+    """경로 후보 약식 목록 (최대 5개). 실시간 조회는 안 하므로 빠르다 — 하나를 골라 /api/route/detail 로 세부를 본다."""
+    start, goal = _validate_route_query(start, goal, start_x, start_y, goal_x, goal_y)
+    return route_candidates(start, goal, start_x, start_y, goal_x, goal_y, goal_name=goal)
+
+
+@api.get("/route/detail", dependencies=[Depends(_limit_dependency(route_limiter))])
+def api_route_detail(
+    index: int = Query(0, ge=0, lt=MAX_ROUTE_CANDIDATES, description="/api/route 응답의 candidates[].index"),
+    goal: Optional[str] = Query(None, max_length=60, description="도착지 이름 (좌표를 주면 표시용 이름)"),
+    start: Optional[str] = Query(None, max_length=40, description="출발 정류장/역 이름 (좌표를 주면 표시용 이름)"),
+    start_x: Optional[float] = Query(None, description="출발지 경도 (선택, 현재 위치용)"),
+    start_y: Optional[float] = Query(None, description="출발지 위도 (선택, 현재 위치용)"),
+    goal_x: Optional[float] = Query(None, description="도착지 경도 (선택, /api/places/search 결과 사용 시)"),
+    goal_y: Optional[float] = Query(None, description="도착지 위도 (선택, /api/places/search 결과 사용 시)"),
+):
+    """선택한 경로(index)의 구간별 세부 + 실시간. /api/route 에 보냈던 파라미터를 그대로 다시 보내야 한다
+    (좌표 기준으로 ODsay 결과가 캐시돼 있어서 같은 경로 목록을 재사용한다)."""
+    start, goal = _validate_route_query(start, goal, start_x, start_y, goal_x, goal_y)
+    return route_detail(start, goal, start_x, start_y, goal_x, goal_y, goal_name=goal, index=index)
 
 
 @api.get("/geocode/reverse", dependencies=[Depends(_limit_dependency(geocode_limiter))])
