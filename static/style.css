@@ -99,6 +99,24 @@ input[type="text"] {
 input[type="text"]::placeholder { color: #7a879b; }
 .field-row { display: flex; gap: 8px; }
 .field-row input { flex: 1; min-width: 0; }
+.field-row .combobox { flex: 1; min-width: 0; }
+
+/* ---- 장소 자동완성 드롭다운 ---- */
+.combobox { position: relative; }
+.suggestions {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 15;
+  margin: 0; padding: 4px; list-style: none;
+  background: var(--surface); border: 1.5px solid var(--edge); border-radius: 4px;
+  box-shadow: 0 8px 20px rgba(15, 26, 48, 0.16);
+  max-height: 15rem; overflow-y: auto;
+}
+.suggestion {
+  display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: 3px; cursor: pointer;
+}
+.suggestion-name { font-weight: 700; }
+.suggestion-meta { font-size: 0.8125rem; color: var(--muted); }
+.suggestion.is-active { background: var(--fog); }
+.suggestion.is-active .suggestion-meta { color: var(--ink); }
 .hint { margin: 6px 0 0; min-height: 1.4em; font-size: 0.875rem; color: var(--muted); }
 .hint.is-error { color: var(--danger); }
 .swap-row { margin: -4px 0 10px; }

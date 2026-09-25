@@ -186,10 +186,13 @@
   /* =====================================================================
      길찾기
      ===================================================================== */
-  const routeState = { coords: null };
+  // start: 출발지. source 는 'geo'(현재 위치) | 'search'(자동완성 선택) | null(직접 입력한 정류장/역 이름).
+  // goal: 도착지. 좌표를 선택했으면 coords, 아니면 입력한 이름 그대로 서버가 정류장/역으로 찾는다.
+  const routeState = { start: { coords: null, source: null }, goal: { coords: null } };
   const startInput = $('#route-start');
   const goalInput = $('#route-goal');
   const locateStatus = $('#locate-status');
+  const goalHint = $('#goal-hint');
   const routeResult = $('#route-result');
 
   function setLocateStatus(text, isError = false) {
@@ -197,8 +200,8 @@
     locateStatus.classList.toggle('is-error', isError);
   }
 
-  function clearCoords() {
-    routeState.coords = null;
+  function clearStartCoords() {
+    routeState.start = { coords: null, source: null };
     $('#btn-swap').disabled = false;
   }
 
@@ -217,7 +220,7 @@
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const coords = { x: pos.coords.longitude, y: pos.coords.latitude };
-        routeState.coords = coords;
+        routeState.start = { coords, source: 'geo' };
         startInput.value = '현재 위치';
         $('#btn-swap').disabled = true;
         setLocateStatus('주소를 확인하는 중이에요…');
@@ -227,9 +230,9 @@
         try {
           const data = await api('/api/geocode/reverse', { x: coords.x.toFixed(6), y: coords.y.toFixed(6) }, signal);
           // 그 사이 위치를 다시 눌렀거나 좌표를 지웠으면 옛 결과는 반영하지 않는다.
-          if (routeState.coords === coords) setLocateStatus('현재 위치: ' + data.address);
+          if (routeState.start.coords === coords) setLocateStatus('현재 위치: ' + data.address);
         } catch (err) {
-          if (!isAbort(err) && routeState.coords === coords) {
+          if (!isAbort(err) && routeState.start.coords === coords) {
             setLocateStatus('현재 위치는 확인했지만 정확한 주소는 찾지 못했어요. 출발지로는 그대로 쓸 수 있어요.');
           }
         }
@@ -245,6 +248,95 @@
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     );
+  }
+
+  /* ---------- 장소 자동완성 (출발/도착 공용) ---------- */
+  function debounce(fn, wait) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), wait);
+    };
+  }
+
+  function suggestionItem(place, index, activeIndex, onPick) {
+    return h('li', {
+      role: 'option', id: 'sugg-' + index, 'aria-selected': String(index === activeIndex),
+      class: 'suggestion' + (index === activeIndex ? ' is-active' : ''),
+      // mousedown(클릭보다 먼저 발생)에서 preventDefault 해야 입력창이 blur 되기 전에 선택을 처리할 수 있다.
+      onmousedown: (e) => { e.preventDefault(); onPick(place); },
+    },
+      h('span', { class: 'suggestion-name' }, place.name),
+      h('span', { class: 'suggestion-meta' }, [place.kind, place.address].filter(Boolean).join(' · ')));
+  }
+
+  /* input(검색창) + listEl(드롭다운 ul)을 자동완성으로 묶는다. onPick(place)/onTyping()은 호출부가 정의. */
+  function setupAutocomplete(input, listEl, searchKey, { onPick, onTyping }) {
+    let items = [];
+    let activeIndex = -1;
+
+    function close() {
+      listEl.hidden = true;
+      listEl.replaceChildren();
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      items = [];
+      activeIndex = -1;
+    }
+
+    function renderList() {
+      if (!items.length) { close(); return; }
+      listEl.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      replace(listEl, items.map((p, i) => suggestionItem(p, i, activeIndex, pick)));
+      if (activeIndex >= 0) input.setAttribute('aria-activedescendant', 'sugg-' + activeIndex);
+      else input.removeAttribute('aria-activedescendant');
+    }
+
+    function pick(place) {
+      input.value = place.name;
+      close();
+      onPick(place);
+    }
+
+    const runSearch = debounce(async (q) => {
+      const signal = begin(searchKey);
+      try {
+        const data = await api('/api/places/search', { q }, signal);
+        items = data.results || [];
+        activeIndex = -1;
+        renderList();
+      } catch (err) {
+        if (!isAbort(err)) close();
+      }
+    }, 300);
+
+    input.addEventListener('input', () => {
+      onTyping();
+      const q = input.value.trim();
+      if (q.length < 1) { close(); return; }
+      runSearch(q);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (listEl.hidden || !items.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % items.length;
+        renderList();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+        renderList();
+      } else if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault();
+        pick(items[activeIndex]);
+      } else if (e.key === 'Escape') {
+        close();
+      }
+    });
+
+    input.addEventListener('blur', close);
   }
 
   /* 구간 하나의 실시간 표시 */
@@ -331,22 +423,29 @@
     e.preventDefault();
     const goal = goalInput.value.trim();
     const start = startInput.value.trim();
-    if (!routeState.coords && !start) {
+    if (!routeState.start.coords && !start) {
       replace(routeResult, message('출발지를 입력하거나 현재 위치를 눌러 주세요.', { error: true }));
       startInput.focus();
       return;
     }
-    if (!goal) {
+    if (!routeState.goal.coords && !goal) {
       replace(routeResult, message('도착지를 입력해 주세요.', { error: true }));
       goalInput.focus();
       return;
     }
-    const params = { goal };
-    if (routeState.coords) {
-      params.start_x = routeState.coords.x.toFixed(6);
-      params.start_y = routeState.coords.y.toFixed(6);
+    const params = {};
+    if (routeState.start.coords) {
+      params.start_x = routeState.start.coords.x.toFixed(6);
+      params.start_y = routeState.start.coords.y.toFixed(6);
     } else {
       params.start = start;
+    }
+    if (routeState.goal.coords) {
+      params.goal_x = routeState.goal.coords.x.toFixed(6);
+      params.goal_y = routeState.goal.coords.y.toFixed(6);
+      if (goal) params.goal = goal; // 표시용 이름 (서버가 route.goal.name 으로 그대로 돌려줌)
+    } else {
+      params.goal = goal;
     }
 
     const submit = $('#route-submit');
@@ -367,15 +466,35 @@
   function initRoute() {
     $('#route-form').addEventListener('submit', submitRoute);
     $('#btn-locate').addEventListener('click', locate);
-    startInput.addEventListener('input', () => {
-      if (routeState.coords) { clearCoords(); setLocateStatus(''); }
+
+    setupAutocomplete(startInput, $('#start-suggestions'), 'suggest-start', {
+      onPick: (place) => {
+        routeState.start = { coords: { x: place.x, y: place.y }, source: 'search' };
+        $('#btn-swap').disabled = false;
+        setLocateStatus('');
+      },
+      onTyping: () => { if (routeState.start.coords) { clearStartCoords(); setLocateStatus(''); } },
     });
-    startInput.addEventListener('focus', () => { if (routeState.coords) startInput.select(); });
+    startInput.addEventListener('focus', () => { if (routeState.start.coords) startInput.select(); });
+
+    setupAutocomplete(goalInput, $('#goal-suggestions'), 'suggest-goal', {
+      onPick: (place) => {
+        routeState.goal = { coords: { x: place.x, y: place.y } };
+        goalHint.textContent = [place.kind, place.address].filter(Boolean).join(' · ');
+      },
+      onTyping: () => { if (routeState.goal.coords) { routeState.goal = { coords: null }; goalHint.textContent = ''; } },
+    });
+
     $('#btn-swap').addEventListener('click', () => {
-      if (routeState.coords) return;
-      const tmp = startInput.value;
+      if (routeState.start.source === 'geo') return; // 현재 위치는 도착지로 옮기지 않는다
+      const tmpValue = startInput.value;
       startInput.value = goalInput.value;
-      goalInput.value = tmp;
+      goalInput.value = tmpValue;
+      const oldStart = routeState.start;
+      routeState.start = routeState.goal.coords ? { coords: routeState.goal.coords, source: 'search' } : { coords: null, source: null };
+      routeState.goal = { coords: oldStart.coords };
+      goalHint.textContent = '';
+      setLocateStatus('');
     });
   }
 

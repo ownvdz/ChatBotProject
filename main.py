@@ -66,6 +66,7 @@ def _env_int(name: str, default: int) -> int:
 # 버스/지하철 API 모두 국토교통부(TAGO). 예전 이름(PUBLIC_BUS_API_KEY)도 폴백으로 인정한다.
 TAGO_API_KEY = _env("PUBLIC_TAGO_API_KEY") or _env("PUBLIC_BUS_API_KEY")
 ODSAY_API_KEY = _env("ODSAY_API_KEY")
+KAKAO_REST_API_KEY = _env("KAKAO_REST_API_KEY")  # 목적지 자유 검색용 (선택, 없어도 정류장/역 검색은 동작)
 DEFAULT_CITY_CODE = _env("BUS_CITY_CODE", "23")
 DEFAULT_ROUTE_ID = _env("BUS_ROUTE_ID", "ICB365000073")
 
@@ -73,11 +74,14 @@ DEFAULT_ROUTE_ID = _env("BUS_ROUTE_ID", "ICB365000073")
 RATE_LIMIT_PER_MIN = _env_int("RATE_LIMIT_PER_MIN", 40)             # /api 전체, IP당 1분
 ROUTE_RATE_LIMIT_PER_MIN = _env_int("ROUTE_RATE_LIMIT_PER_MIN", 10)  # /api/route(ODsay 쿼터 보호), IP당 1분
 GEOCODE_RATE_LIMIT_PER_MIN = _env_int("GEOCODE_RATE_LIMIT_PER_MIN", 20)  # /api/geocode/reverse, IP당 1분
+PLACES_RATE_LIMIT_PER_MIN = _env_int("PLACES_RATE_LIMIT_PER_MIN", 60)  # /api/places/search(자동완성), IP당 1분
 
 if not TAGO_API_KEY:
     log.warning("PUBLIC_TAGO_API_KEY 가 없습니다. 버스/지하철 API는 503을 반환합니다.")
 if not ODSAY_API_KEY:
     log.warning("ODSAY_API_KEY 가 없습니다. /api/route 는 503을 반환합니다.")
+if not KAKAO_REST_API_KEY:
+    log.info("KAKAO_REST_API_KEY 가 없습니다. 목적지 검색은 정류장/역 이름만 가능합니다.")
 
 # 시간 계산은 서버 시간대와 무관하게 항상 한국 시간. (Oracle 서버 기본 시간대가 UTC일 수 있음)
 # tzdata 가 없어도 동작하도록, 못 찾으면 고정 +09:00 을 쓴다 (한국은 서머타임이 없다).
@@ -320,6 +324,7 @@ def client_ip(request: Request) -> str:
 general_limiter = RateLimiter(RATE_LIMIT_PER_MIN)
 route_limiter = RateLimiter(ROUTE_RATE_LIMIT_PER_MIN)
 geocode_limiter = RateLimiter(GEOCODE_RATE_LIMIT_PER_MIN)
+places_limiter = RateLimiter(PLACES_RATE_LIMIT_PER_MIN)
 
 
 def _limit_dependency(limiter: RateLimiter):
@@ -643,6 +648,103 @@ def reverse_geocode(lon: float, lat: float) -> str:
         return address
 
     return cached(_geocode_cache, key, 600, load)
+
+
+# =============================================================================
+# 장소 검색 (자유 목적지): ODsay 정류장/역 이름 검색 + 카카오 로컬 키워드 검색을 합친다
+# =============================================================================
+# ODsay searchStation 은 정류장/역 이름만 찾아서 "회사", "학교 앞 편의점" 같은 임의 목적지는 못 찾는다.
+# 그래서 카카오 로컬 API(키워드 검색)를 더해 임의 장소도 찾을 수 있게 한다.
+# 카카오 키가 없으면(KAKAO_REST_API_KEY 미설정) 정류장/역 검색 결과만 반환한다 (기능이 죽지 않고 좁아질 뿐).
+KAKAO_KEYWORD_HOST = "https://dapi.kakao.com/v2/local/search/keyword.json"
+_kakao_cache = TTLCache(300)
+PLACE_SEARCH_TTL_SEC = 3600
+
+
+def kakao_search_place(query: str, limit: int) -> List[Dict[str, Any]]:
+    """카카오 로컬 키워드 검색. 키가 없으면 빈 목록. 인증/네트워크 오류는 ApiError로 올리되, 이 기능은
+    '있으면 더 좋은' 보조 기능이라 호출부(search_places)에서 실패해도 정류장/역 검색 결과는 그대로 보여준다."""
+    if not KAKAO_REST_API_KEY:
+        return []
+
+    def load() -> List[Dict[str, Any]]:
+        try:
+            resp = requests.get(
+                KAKAO_KEYWORD_HOST, params={"query": query, "size": min(max(limit, 1), 15)},
+                headers={"Authorization": "KakaoAK {}".format(KAKAO_REST_API_KEY), "Accept-Language": "ko"},
+                timeout=HTTP_TIMEOUT,
+            )
+        except requests.RequestException as exc:
+            log.warning("카카오 로컬 API 네트워크 오류: %s", _redact(exc))
+            raise ApiError("장소 검색 서버에 연결하지 못했어요.", 502, "upstream_error") from None
+        if resp.status_code == 401:
+            log.warning("카카오 로컬 API 인증 실패 (KAKAO_REST_API_KEY 확인 필요)")
+            raise ApiError("장소 검색 서비스 인증에 문제가 있어요.", 502, "upstream_auth")
+        if resp.status_code != 200:
+            log.warning("카카오 로컬 API HTTP %s", resp.status_code)
+            raise ApiError("장소 검색에 실패했어요.", 502, "upstream_error")
+        try:
+            data = resp.json()
+        except ValueError:
+            raise ApiError("장소 검색 응답을 해석하지 못했어요.", 502, "upstream_error")
+
+        out = []
+        for d in (data.get("documents", []) or []):
+            xy = _to_xy(d.get("x"), d.get("y"))  # 카카오는 x=경도, y=위도 (문자열)로 내려준다
+            if xy is None or not d.get("place_name"):
+                continue
+            out.append({
+                "name": d["place_name"],
+                "kind": "장소",
+                "address": d.get("road_address_name") or d.get("address_name") or None,
+                "x": xy[0], "y": xy[1],
+            })
+        return out
+
+    return cached(_kakao_cache, (_normalize(query), limit), PLACE_SEARCH_TTL_SEC, load, store_if=lambda v: bool(v))
+
+
+def search_places(query: str, limit: int = 8) -> List[Dict[str, Any]]:
+    """정류장/역 + (카카오 키가 있으면) 일반 장소를 합쳐서 후보 목록을 만든다. 정류장/역을 먼저 보여준다
+    (버스/지하철 이용이 이 프로젝트의 핵심이라 그쪽을 우선순위로 둠)."""
+    results: List[Dict[str, Any]] = []
+    seen = set()
+
+    try:
+        stations = odsay_search_station(query)
+    except ApiError:
+        stations = []
+    for st in stations:
+        xy = _to_xy(st.get("x"), st.get("y"))
+        name = st.get("stationName")
+        if xy is None or not name:
+            continue
+        key = (round(xy[0], 5), round(xy[1], 5))
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append({
+            "name": name,
+            "kind": STATION_CLASS_NAMES.get(_safe_int(st.get("stationClass")), "정류장/역"),
+            "address": None, "x": xy[0], "y": xy[1],
+        })
+        if len(results) >= limit:
+            return results[:limit]
+
+    try:
+        places = kakao_search_place(query, limit)
+    except ApiError:
+        places = []  # 카카오 쪽이 실패해도 위에서 찾은 정류장/역 결과는 그대로 반환
+    for p in places:
+        key = (round(p["x"], 5), round(p["y"], 5))
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(p)
+        if len(results) >= limit:
+            break
+
+    return results[:limit]
 
 
 # =============================================================================
@@ -1273,20 +1375,30 @@ def _first_lane(sub_path: Dict[str, Any]) -> Dict[str, Any]:
     return lane if isinstance(lane, dict) else {}
 
 
-def route_overview(start: Optional[str], goal: str, start_x: Optional[float], start_y: Optional[float]) -> Dict[str, Any]:
+def route_overview(start: Optional[str], goal: Optional[str], start_x: Optional[float], start_y: Optional[float],
+                   goal_x: Optional[float] = None, goal_y: Optional[float] = None,
+                   goal_name: Optional[str] = None) -> Dict[str, Any]:
     now = now_kst()
 
-    # 1) 출발/도착 확정 (이름 검색은 동시에)
-    use_coords = start_x is not None and start_y is not None
-    jobs: Dict[Any, Callable[[], Any]] = {"goal": functools.partial(resolve_place, goal)}
-    if not use_coords:
+    # 1) 출발/도착 확정 (좌표가 있으면 그대로 쓰고, 없으면 이름으로 검색 — 검색은 동시에)
+    start_use_coords = start_x is not None and start_y is not None
+    goal_use_coords = goal_x is not None and goal_y is not None
+    jobs: Dict[Any, Callable[[], Any]] = {}
+    if not start_use_coords:
         jobs["start"] = functools.partial(resolve_place, start or "")
-    resolved = run_parallel(jobs, 15)
-    if use_coords:
+    if not goal_use_coords:
+        jobs["goal"] = functools.partial(resolve_place, goal or "")
+    resolved = run_parallel(jobs, 15) if jobs else {}
+
+    if start_use_coords:
         start_place = {"query": start or "", "name": start or "현재 위치", "kind": "현재 위치", "x": start_x, "y": start_y}
     else:
         start_place = unwrap(resolved["start"])
-    goal_place = unwrap(resolved["goal"])
+    if goal_use_coords:
+        goal_place = {"query": goal_name or goal or "", "name": goal_name or goal or "목적지", "kind": "장소",
+                      "x": goal_x, "y": goal_y}
+    else:
+        goal_place = unwrap(resolved["goal"])
 
     # 2) 경로 탐색: 첫 번째 경로만 사용
     paths = odsay_search_path(start_place["x"], start_place["y"], goal_place["x"], goal_place["y"])
@@ -1456,12 +1568,22 @@ async def _security_headers(request: Request, call_next):
 def health() -> Dict[str, Any]:
     """서버 상태 확인 (제한 없음, 외부 API 호출 없음). 키는 '설정 여부'만 알려준다."""
     return {"status": "ok", "time": _iso(), "timezone": "Asia/Seoul",
-            "tago_key_configured": bool(TAGO_API_KEY), "odsay_key_configured": bool(ODSAY_API_KEY)}
+            "tago_key_configured": bool(TAGO_API_KEY), "odsay_key_configured": bool(ODSAY_API_KEY),
+            "kakao_key_configured": bool(KAKAO_REST_API_KEY)}
 
 
 @api.get("/timetable")
 def api_timetable(day: Optional[str] = Query(None, max_length=8, description="월요일~일요일 (생략하면 오늘)")):
     return timetable_overview(day)
+
+
+@api.get("/places/search", dependencies=[Depends(_limit_dependency(places_limiter))])
+def api_places_search(q: str = Query(..., min_length=1, max_length=40, description="검색어 (자동완성용)")):
+    """출발/도착 검색창의 자동완성용. 정류장/역 + (카카오 키가 있으면) 일반 장소를 함께 찾는다."""
+    q = q.strip()
+    if not q:
+        raise ApiError("검색어를 입력해 주세요.", 422, "invalid_request")
+    return {"query": q, "results": search_places(q, limit=8)}
 
 
 @api.get("/subway")
@@ -1493,25 +1615,28 @@ def api_bus_locations():
 
 @api.get("/route", dependencies=[Depends(_limit_dependency(route_limiter))])
 def api_route(
-    goal: str = Query(..., min_length=1, max_length=40, description="도착 정류장/역 이름"),
+    goal: Optional[str] = Query(None, max_length=60, description="도착지 이름 (좌표를 주면 표시용 이름)"),
     start: Optional[str] = Query(None, max_length=40, description="출발 정류장/역 이름 (좌표를 주면 표시용 이름)"),
     start_x: Optional[float] = Query(None, description="출발지 경도 (선택, 현재 위치용)"),
     start_y: Optional[float] = Query(None, description="출발지 위도 (선택, 현재 위치용)"),
+    goal_x: Optional[float] = Query(None, description="도착지 경도 (선택, /api/places/search 결과 사용 시)"),
+    goal_y: Optional[float] = Query(None, description="도착지 위도 (선택, /api/places/search 결과 사용 시)"),
 ):
     """ODsay 경로 + 구간별 실시간. 실시간 조회가 실패해도 경로 요약은 항상 내려간다."""
-    goal = goal.strip()
+    goal = (goal or "").strip() or None
     start = (start or "").strip() or None
-    if not goal:
-        raise ApiError("도착지를 입력해 주세요.", 422, "invalid_request")
     if (start_x is None) != (start_y is None):
         raise ApiError("출발 좌표는 start_x(경도)와 start_y(위도)를 함께 보내야 해요.", 422, "invalid_request")
-    if start_x is not None and start_y is not None:
-        # 경도/위도가 뒤바뀐 요청을 걸러내기 위해 대한민국 대략 범위만 허용
-        if not (124.0 <= start_x <= 132.0 and 33.0 <= start_y <= 39.0):
-            raise ApiError("출발 좌표가 대한민국 범위를 벗어났어요. (start_x=경도, start_y=위도)", 422, "invalid_request")
-    elif not start:
+    if (goal_x is None) != (goal_y is None):
+        raise ApiError("도착 좌표는 goal_x(경도)와 goal_y(위도)를 함께 보내야 해요.", 422, "invalid_request")
+    for label, x, y in (("출발", start_x, start_y), ("도착", goal_x, goal_y)):
+        if x is not None and y is not None and not (124.0 <= x <= 132.0 and 33.0 <= y <= 39.0):
+            raise ApiError("{} 좌표가 대한민국 범위를 벗어났어요.".format(label), 422, "invalid_request")
+    if start_x is None and not start:
         raise ApiError("출발지를 입력해 주세요.", 422, "invalid_request")
-    return route_overview(start, goal, start_x, start_y)
+    if goal_x is None and not goal:
+        raise ApiError("도착지를 입력해 주세요.", 422, "invalid_request")
+    return route_overview(start, goal, start_x, start_y, goal_x, goal_y, goal_name=goal)
 
 
 @api.get("/geocode/reverse", dependencies=[Depends(_limit_dependency(geocode_limiter))])
