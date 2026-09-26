@@ -261,6 +261,38 @@
     };
   }
 
+  /* ---------- 장소 검색 결과 캐시 (localStorage — 새로고침해도 남아서 서버/ODsay 재호출을 줄인다) ----------
+     출발·도착 입력창이 이 캐시를 같이 쓴다. 서버 쪽 정류장 캐시(24h)와 만료 시간을 맞춰뒀다. */
+  const PLACE_CACHE_KEY = 'transit-web:places:v1';
+  const PLACE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+  function readPlaceCache() {
+    try {
+      const raw = localStorage.getItem(PLACE_CACHE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {}; // 시크릿 모드 등에서 localStorage 접근이 막혀 있어도 기능엔 지장 없게
+    }
+  }
+
+  function writePlaceCache(store) {
+    try {
+      localStorage.setItem(PLACE_CACHE_KEY, JSON.stringify(store));
+    } catch (_) { /* 저장 용량 초과 등으로 실패해도 무시 — 이번 세션만 캐시가 안 남을 뿐 */ }
+  }
+
+  const placeCacheStore = readPlaceCache();
+
+  function getCachedPlaces(q) {
+    const entry = placeCacheStore[q];
+    return (entry && entry.expires > Date.now()) ? entry.items : null;
+  }
+
+  function setCachedPlaces(q, items) {
+    placeCacheStore[q] = { items, expires: Date.now() + PLACE_CACHE_TTL_MS };
+    writePlaceCache(placeCacheStore);
+  }
+
   function suggestionItem(place, index, activeIndex, onPick) {
     return h('li', {
       role: 'option', id: 'sugg-' + index, 'aria-selected': String(index === activeIndex),
@@ -301,10 +333,10 @@
       onPick(place);
     }
 
-    const cache = new Map(); // 같은 검색어를 다시 치면 API를 또 부르지 않는다 (ODsay 일일 쿼터 절약)
     const runSearch = debounce(async (q) => {
-      if (cache.has(q)) {
-        items = cache.get(q);
+      const cached = getCachedPlaces(q);
+      if (cached) {
+        items = cached;
         activeIndex = -1;
         renderList();
         return;
@@ -313,13 +345,13 @@
       try {
         const data = await api('/api/places/search', { q }, signal);
         items = data.results || [];
-        cache.set(q, items);
+        setCachedPlaces(q, items);
         activeIndex = -1;
         renderList();
       } catch (err) {
         if (!isAbort(err)) close();
       }
-    }, 450);
+    }, 500);
 
     input.addEventListener('input', () => {
       onTyping();

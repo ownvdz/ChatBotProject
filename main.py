@@ -135,8 +135,8 @@ ROUTE_INFO_TTL_SEC = 24 * 3600
 SCHEDULE_TTL_SEC = 6 * 3600
 SUBWAY_STATION_TTL_SEC = 24 * 3600
 NEGATIVE_TTL_SEC = 600          # '검색 결과 없음'은 짧게만 기억
-STATION_SEARCH_TTL_SEC = 3600   # ODsay searchStation
-PATH_TTL_SEC = 300              # ODsay 경로 (실시간 정보는 여기에 포함하지 않음)
+STATION_SEARCH_TTL_SEC = 24 * 3600  # ODsay searchStation — 정류장/역 이름·좌표는 사실상 안 바뀌므로 넉넉하게
+PATH_TTL_SEC = 1800              # ODsay 경로 (노선 구성 자체는 자주 안 바뀜; 실시간 정보는 여기 안 들어있음)
 
 REALTIME_DEADLINE_SEC = 12      # 실시간 조회가 이 시간을 넘기면 포기하고 경로 요약만 내려준다
 
@@ -539,8 +539,8 @@ def odsay_get(endpoint: str, params: Dict[str, Any], retries: int = 2, backoff: 
     raise ApiError(last_message, 502, "upstream_error")
 
 
-_station_search_cache = TTLCache(500)
-_path_cache = TTLCache(300)
+_station_search_cache = TTLCache(1500)  # TTL이 24h로 길어진 만큼 용량도 넉넉하게
+_path_cache = TTLCache(600)
 
 STATION_CLASS_NAMES = {1: "버스 정류장", 2: "지하철역"}
 
